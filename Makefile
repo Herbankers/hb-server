@@ -12,7 +12,7 @@ MAKEFLAGS	:= -s
 CFLAGS		:= -Wall -Wextra -unused-parameter -Wpedantic -std=c99 -D_XOPEN_SOURCE=700 `pkg-config --cflags $(PKGLIST)` -g -O0 #-s -Os
 LDFLAGS		:= -lpthread `pkg-config --libs $(PKGLIST)`
 
-kech-o	= main.o draw.o
+kech-o	= main.o draw.o menu.o
 
 all: kech
 

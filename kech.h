@@ -1,7 +1,29 @@
 #ifndef _KECH_H
 #define _KECH_H
 
+#include <pthread.h>
+#include <stdbool.h>
 #include <stdint.h>
+
+#define TEXT_BUFFER	4
+
+#define WIDTH		800
+#define HEIGHT		600
+
+#define BANNER_HEIGHT	0.2
+
+#define PADDING_TOP	20
+#define PADDING_BOTTOM	20
+
+#define BUTTON_WIDTH	150
+#define BUTTON_HEIGHT	75
+#define BUTTON_PADDING	20
+
+#define BULLET_RADIUS	40
+#define BULLET_PADDING	40
+
+#define TEXTBOX_HEIGHT	(BULLET_PADDING * 2 + BULLET_RADIUS)
+#define TEXTBOX_WIDTH	(BULLET_PADDING + (BULLET_RADIUS * 2 + BULLET_PADDING) * TEXT_BUFFER)
 
 enum {
 	_NET_WM_NAME,
@@ -10,42 +32,19 @@ enum {
 	ATOM_MAX
 };
 
-enum {
-	MODE_STANDBY,
-	MODE_MESSAGE,
-	MODE_BUTTONS,
-	MODE_AMOUNT,
-	MODE_PIN
-};
-
-enum {
-	MENU_STANDBY,
-	MENU_PINENTRY,
-	MENU_MAIN,
-	MENU_WITHDRAW,
-	MENU_WITHDRAWN,
-	MENU_DEPOSIT,
-	MENU_ACCOUNTS,
-	MENU_PINCHANGE
-};
-
-#define MSG_TYPE_INV	0
-#define MSG_TYPE_NUM	1
-#define MSG_TYPE_CARD	2
-
-struct msg {
-	/* Message type */
-	const uint8_t	type;
-	/* Message length in bytes */
-	const int	length;
-	/* Message */
-	const char	msg[];
-};
-
 extern const pthread_mutex_t lock;
+
+extern uint16_t		w, h;
 
 void die(const char *errstr, ...);
 
+bool button_check(bool press, int x, int y);
+void draw_menu(void);
+bool need_input(void);
+
+void draw_background(void);
+void draw_button(int n, int t, bool side, bool pressed, const char *text);
+void draw_pin(void);
 void *draw();
 void draw_fini(void);
 

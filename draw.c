@@ -5,102 +5,17 @@
 #include <X11/keysym.h>
 
 #include <math.h>
-#include <pthread.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "kech.h"
-
-#define TEXT_BUFFER	4
-
-#define WIDTH		800
-#define HEIGHT		600
-
-#define BANNER_HEIGHT	0.2
-
-#define PADDING_TOP	20
-#define PADDING_BOTTOM	20
-
-#define BUTTON_WIDTH	150
-#define BUTTON_HEIGHT	75
-#define BUTTON_PADDING	20
-#define BUTTON_MAX	4
-
-#define BULLET_RADIUS	40
-#define BULLET_PADDING	40
-
-#define TEXTBOX_HEIGHT	(BULLET_PADDING * 2 + BULLET_RADIUS)
-#define TEXTBOX_WIDTH	(BULLET_PADDING + (BULLET_RADIUS * 2 + BULLET_PADDING) * TEXT_BUFFER)
-
-struct button {
-	const char	*text;
-	void		*handler;
-};
-
-struct menu {
-	int			mode;
-	const char		*text;
-	const struct button	buttons_left[BUTTON_MAX],
-				buttons_right[BUTTON_MAX];
-};
-
-static struct menu menus[] = {
-	[MENU_STANDBY] = {
-		.mode = MODE_STANDBY
-	},
-	[MENU_PINENTRY] = {
-		.mode = MODE_PIN
-	},
-	[MENU_MAIN] = {
-		.mode = MODE_BUTTONS,
-		.buttons_left = {
-			{ "Withdraw", NULL },
-			{ "Deposit", NULL }
-		},
-		.buttons_right = {
-			{ "Accounts", NULL },
-			{ "Change PIN", NULL }
-		}
-	},
-	[MENU_WITHDRAW] = {
-		.mode = MODE_BUTTONS,
-		.buttons_left = {
-			{ "€ 10", NULL },
-			{ "€ 20", NULL },
-			{ "€ 50", NULL },
-			{ "€ 100", NULL }
-		},
-		.buttons_right = {
-			{ "€ 200", NULL },
-			{ "€ 500", NULL },
-			{ "Custom", NULL },
-			{ "Back", NULL }
-		}
-	},
-	[MENU_WITHDRAWN] = {
-		.mode = MODE_AMOUNT
-	},
-	[MENU_DEPOSIT] = {
-		.mode = MODE_AMOUNT
-	},
-	[MENU_ACCOUNTS] = {
-		.mode = MODE_BUTTONS,
-		.buttons_right = {
-			{ "Back", NULL }
-		}
-	},
-	[MENU_PINCHANGE] = {
-		.mode = MODE_PIN
-	}
-};
 
 static xcb_connection_t	*conn;
 static xcb_screen_t	*screen;
 static xcb_key_symbols_t *keysyms;
 static xcb_window_t	win;
 static xcb_atom_t	atoms[ATOM_MAX];
-static uint16_t		w, h;
+uint16_t		w, h;
 
 static cairo_t		*cr;
 static cairo_surface_t	*sur;
@@ -108,8 +23,6 @@ static cairo_surface_t	*sur;
 static const char		font_desc[] = "sans-serif";
 static PangoFontDescription	*font;
 
-/* static int		menu = MENU_STANDBY; */
-static int		menu = MENU_MAIN;
 static char		buf[TEXT_BUFFER + 1];
 static unsigned char	bufi;
 
@@ -172,16 +85,9 @@ void text_draw(int x, int y, int w, int h, const char *text, int size)
 	g_object_unref(G_OBJECT(layout));
 }
 
-static void draw_background(void)
+void draw_background(void)
 {
 	cairo_surface_t *logo;
-
-	/* cairo_set_source_rgb(cr, 0.0, 0.0, 0.0); */
-
-	/* cairo_rectangle(cr, 0, 0, w, BANNER_HEIGHT * h);
-	cairo_fill(cr); */
-
-	/* cairo_rectangle(cr, 0, BANNER_HEIGHT * h, w, h - BANNER_HEIGHT * h); */
 
 	cairo_set_source_rgb(cr, 0.96, 0.96, 0.96);
 	cairo_rectangle(cr, 0, 0, w, h);
@@ -194,7 +100,7 @@ static void draw_background(void)
 	cairo_surface_destroy(logo);
 }
 
-static void draw_button(int n, int t, bool side, bool pressed, const char *text)
+void draw_button(int n, int t, bool side, bool pressed, const char *text)
 {
 	int x, y;
 
@@ -214,20 +120,7 @@ static void draw_button(int n, int t, bool side, bool pressed, const char *text)
 	text_draw(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, text, 16);
 }
 
-static void draw_buttons(const struct button *btns, bool side)
-{
-	int i, n;
-
-	if (!btns)
-		return;
-
-	for (n = 0; btns[n].text && n < BUTTON_MAX; n++);
-
-	for (i = 0; i < n; i++)
-		draw_button(i, n, side, 0, btns[i].text);
-}
-
-static void draw_pin(void)
+void draw_pin(void)
 {
 	int x, y, i;
 
@@ -248,32 +141,6 @@ static void draw_pin(void)
 				0, 2 * M_PI);
 		cairo_fill(cr);
 	}
-}
-
-static void draw_menu(void)
-{
-	draw_background();
-
-	switch (menus[menu].mode) {
-	case MODE_MESSAGE:
-		/* TODO */
-		break;
-	case MODE_BUTTONS:
-		draw_buttons(menus[menu].buttons_left, 0);
-		draw_buttons(menus[menu].buttons_right, 1);
-		break;
-	case MODE_AMOUNT:
-		/* TODO */
-		break;
-	case MODE_PIN:
-		draw_pin();
-		break;
-	case MODE_STANDBY:
-	default:
-		break;
-	}
-
-	xcb_flush(conn);
 }
 
 static void geom_update(void)
@@ -313,11 +180,21 @@ static void geom_update(void)
 	cr = cairo_create(sur);
 }
 
+static void button_update(xcb_button_press_event_t *e)
+{
+	if (!button_check((e->response_type == XCB_BUTTON_PRESS),
+			e->event_x, e->event_y))
+		return;
+
+	draw_menu();
+	xcb_flush(conn);
+}
+
 static void text_update(xcb_key_press_event_t *e)
 {
 	xcb_keysym_t keysym;
 
-	if (menus[menu].mode != MODE_PIN && menus[menu].mode != MODE_AMOUNT)
+	if (!need_input())
 		return;
 
 	keysym = xcb_key_symbols_get_keysym(keysyms, e->detail, 0);
@@ -390,6 +267,7 @@ static void text_update(xcb_key_press_event_t *e)
 	}
 
 	draw_menu();
+	xcb_flush(conn);
 }
 
 static void font_init(void)
@@ -415,8 +293,8 @@ static void draw_init(void)
 {
 	const char *title = "kech";
 	const uint32_t events = {
-		XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS |
-		XCB_EVENT_MASK_KEY_PRESS
+		XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
+		XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_KEY_PRESS
 	};
 
 	if (!(conn = xcb_connect(0, 0)))
@@ -480,10 +358,12 @@ void *draw()
 				geom_update();
 
 			draw_menu();
+			xcb_flush(conn);
 
 			break;
 		case XCB_BUTTON_PRESS:
-
+		case XCB_BUTTON_RELEASE:
+			button_update((xcb_button_press_event_t *) e);
 			break;
 		case XCB_KEY_PRESS:
 			text_update((xcb_key_press_event_t *) e);
