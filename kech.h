@@ -5,7 +5,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define TEXT_BUFFER	4
+#define KEY_BUFFER	6
+#define AMOUNT_LENGTH	6
+#define PIN_LENGTH	4
 
 #define WIDTH		800
 #define HEIGHT		600
@@ -23,7 +25,10 @@
 #define BULLET_PADDING	40
 
 #define TEXTBOX_HEIGHT	(BULLET_PADDING * 2 + BULLET_RADIUS)
-#define TEXTBOX_WIDTH	(BULLET_PADDING + (BULLET_RADIUS * 2 + BULLET_PADDING) * TEXT_BUFFER)
+#define TEXTBOX_WIDTH	(BULLET_PADDING + (BULLET_RADIUS * 2 + BULLET_PADDING) \
+			* KEY_BUFFER)
+#define PINBOX_WIDTH	(BULLET_PADDING + (BULLET_RADIUS * 2 + BULLET_PADDING) \
+			* PIN_LENGTH)
 
 enum {
 	_NET_WM_NAME,
@@ -40,9 +45,10 @@ void die(const char *errstr, ...);
 
 bool button_check(bool press, int x, int y);
 void draw_menu(void);
-bool need_input(void);
+bool need_input(int n);
 
 void draw_background(void);
+void draw_text(int x, int y, int w, int h, const char *text, int size);
 void draw_button(int n, int t, bool side, bool pressed, const char *text);
 void draw_pin(void);
 void *draw();

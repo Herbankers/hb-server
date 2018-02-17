@@ -23,7 +23,7 @@ static cairo_surface_t	*sur;
 static const char		font_desc[] = "sans-serif";
 static PangoFontDescription	*font;
 
-static char		buf[TEXT_BUFFER + 1];
+static char		buf[KEY_BUFFER];
 static unsigned char	bufi;
 
 static int textw(cairo_t *cr, const char *text)
@@ -64,9 +64,27 @@ static int texth(cairo_t *cr, const char *text)
 	return h;
 }
 
-void text_draw(int x, int y, int w, int h, const char *text, int size)
+void draw_background(void)
+{
+	cairo_surface_t *logo;
+
+	cairo_set_source_rgb(cr, 0.96, 0.96, 0.96);
+	cairo_rectangle(cr, 0, 0, w, h);
+	cairo_fill(cr);
+
+	logo = cairo_image_surface_create_from_png("logo.png");
+	cairo_set_source_surface(cr, logo, w - 1536, 0);
+	cairo_paint(cr);
+
+	cairo_surface_destroy(logo);
+}
+
+void draw_text(int x, int y, int w, int h, const char *text, int size)
 {
 	PangoLayout *layout;
+
+	if (!text)
+		return;
 
 	pango_font_description_set_size(font, size * PANGO_SCALE);
 	layout = pango_cairo_create_layout(cr);
@@ -83,21 +101,6 @@ void text_draw(int x, int y, int w, int h, const char *text, int size)
 	pango_cairo_show_layout(cr, layout);
 
 	g_object_unref(G_OBJECT(layout));
-}
-
-void draw_background(void)
-{
-	cairo_surface_t *logo;
-
-	cairo_set_source_rgb(cr, 0.96, 0.96, 0.96);
-	cairo_rectangle(cr, 0, 0, w, h);
-	cairo_fill(cr);
-
-	logo = cairo_image_surface_create_from_png("logo.png");
-	cairo_set_source_surface(cr, logo, w - 1536, 0);
-	cairo_paint(cr);
-
-	cairo_surface_destroy(logo);
 }
 
 void draw_button(int n, int t, bool side, bool pressed, const char *text)
@@ -117,7 +120,7 @@ void draw_button(int n, int t, bool side, bool pressed, const char *text)
 	cairo_rectangle(cr, x, y, BUTTON_WIDTH, BUTTON_HEIGHT);
 	cairo_fill(cr);
 
-	text_draw(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, text, 16);
+	draw_text(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, text, 16);
 }
 
 void draw_pin(void)
@@ -126,15 +129,16 @@ void draw_pin(void)
 
 	cairo_set_source_rgb(cr, 0.69, 0.75, 0.77);
 
-	x = w / 2 - TEXTBOX_WIDTH / 2;
+	x = w / 2 - PINBOX_WIDTH / 2;
 	y = BANNER_HEIGHT * h + (h - BANNER_HEIGHT * h) / 2 -
 			TEXTBOX_HEIGHT / 2;
 
-	cairo_rectangle(cr, x, y, TEXTBOX_WIDTH, TEXTBOX_HEIGHT);
+	cairo_rectangle(cr, x, y, PINBOX_WIDTH, TEXTBOX_HEIGHT);
 	cairo_fill(cr);
 
 	for (i = 0; i < bufi; i++) {
 		cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
+		/* TODO Algorithm to center bullets */
 		cairo_arc(cr, x + BULLET_RADIUS + BULLET_PADDING +
 				(BULLET_RADIUS * 2 + BULLET_PADDING) * i,
 				y + TEXTBOX_HEIGHT / 2, BULLET_RADIUS,
@@ -182,6 +186,7 @@ static void geom_update(void)
 
 static void button_update(xcb_button_press_event_t *e)
 {
+	/* Only redraw if button has an action hook */
 	if (!button_check((e->response_type == XCB_BUTTON_PRESS),
 			e->event_x, e->event_y))
 		return;
@@ -194,14 +199,17 @@ static void text_update(xcb_key_press_event_t *e)
 {
 	xcb_keysym_t keysym;
 
-	if (!need_input())
+	/* First check if current menu needs keyboard input */
+	if (!need_input(bufi))
 		return;
 
 	keysym = xcb_key_symbols_get_keysym(keysyms, e->detail, 0);
 
-	if (bufi == TEXT_BUFFER)
+	/* Should be checked by need_input() buy just in case */
+	if (bufi > KEY_BUFFER)
 		return;
 
+	/* Ugh... */
 	switch (keysym) {
 	case XK_0:
 	case XK_KP_0:

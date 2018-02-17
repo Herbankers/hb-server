@@ -33,7 +33,7 @@ struct button {
 
 struct menu {
 	const int	mode;
-	const char	*text;
+	const char	*message;
 	struct button	buttons_left[BUTTON_MAX],
 			buttons_right[BUTTON_MAX];
 };
@@ -52,7 +52,8 @@ static struct menu menus[] = {
 		.mode = MODE_STANDBY
 	},
 	[MENU_PINENTRY] = {
-		.mode = MODE_PIN
+		.mode = MODE_PIN,
+		.message = "Please enter your PIN using the keypad"
 	},
 	[MENU_MAIN] = {
 		.mode = MODE_BUTTONS,
@@ -67,6 +68,7 @@ static struct menu menus[] = {
 	},
 	[MENU_WITHDRAW] = {
 		.mode = MODE_BUTTONS,
+		.message = "Please choose the desired amount",
 		.buttons_left = {
 			{ "€ 10", { .handler = &withdraw } },
 			{ "€ 20", { .handler = &withdraw } },
@@ -82,24 +84,28 @@ static struct menu menus[] = {
 	},
 	[MENU_WITHDRAWN] = {
 		.mode = MODE_AMOUNT,
+		.message = "Please enter the desired amount using the keypad",
 		.buttons_right = {
 			{ "Back", { .menu = MENU_WITHDRAW } }
 		}
 	},
 	[MENU_DEPOSIT] = {
 		.mode = MODE_AMOUNT,
+		.message = "TODO",
 		.buttons_right = {
 			{ "Back", { .menu = MENU_MAIN } }
 		}
 	},
 	[MENU_ACCOUNTS] = {
 		.mode = MODE_BUTTONS,
+		.message = "Please select the account you'd like to manage",
 		.buttons_right = {
 			{ "Back", { .menu = MENU_MAIN } }
 		}
 	},
 	[MENU_PINCHANGE] = {
 		.mode = MODE_PIN,
+		.message = "Please enter your current PIN using the keypad",
 		.buttons_right = {
 			{ "Back", { .menu = MENU_MAIN } }
 		}
@@ -154,6 +160,7 @@ bool button_check(bool press, int x, int y)
 	if (!press && pressed) {
 		if (pressed->action.menu)
 			menu = pressed->action.menu;
+
 		pressed = NULL;
 
 		return 1;
@@ -174,9 +181,10 @@ void draw_menu(void)
 {
 	draw_background();
 
+	draw_text(0, h * 0.85, w, 0, menus[menu].message, 32);
+
 	switch (menus[menu].mode) {
 	case MODE_MESSAGE:
-		/* TODO */
 		draw_buttons(menus[menu].buttons_right, 1);
 		break;
 	case MODE_BUTTONS:
@@ -197,7 +205,19 @@ void draw_menu(void)
 	}
 }
 
-bool need_input(void)
+bool need_input(int n)
 {
-	return menus[menu].mode == MODE_PIN || menus[menu].mode == MODE_AMOUNT;
+	if (menus[menu].mode == MODE_PIN) {
+		if (n > PIN_LENGTH - 1)
+			return 0;
+		else
+			return 1;
+	} else if (menus[menu].mode == MODE_AMOUNT) {
+		if (n > AMOUNT_LENGTH - 1)
+			return 0;
+		else
+			return 1;
+	}
+
+	return 0;
 }
