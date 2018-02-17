@@ -7,12 +7,12 @@
 
 #define KEY_BUFFER	6
 #define AMOUNT_LENGTH	6
-#define PIN_LENGTH	4
+#define PIN_LENGTH	6
 
 #define WIDTH		800
 #define HEIGHT		600
 
-#define BANNER_HEIGHT	0.2
+#define BANNER_HEIGHT	420
 
 #define PADDING_TOP	20
 #define PADDING_BOTTOM	20
@@ -47,6 +47,7 @@ bool button_check(bool press, int x, int y);
 void draw_menu(void);
 bool need_input(int n);
 
+void draw_banner(void);
 void draw_background(void);
 void draw_text(int x, int y, int w, int h, const char *text, int size);
 void draw_button(int n, int t, bool side, bool pressed, const char *text);

@@ -64,19 +64,27 @@ static int texth(cairo_t *cr, const char *text)
 	return h;
 }
 
-void draw_background(void)
+void draw_banner(void)
 {
 	cairo_surface_t *logo;
 
+	logo = cairo_image_surface_create_from_png("logo.png");
+
 	cairo_set_source_rgb(cr, 0.96, 0.96, 0.96);
-	cairo_rectangle(cr, 0, 0, w, h);
+	cairo_rectangle(cr, 0, 0, w, BANNER_HEIGHT);
 	cairo_fill(cr);
 
-	logo = cairo_image_surface_create_from_png("logo.png");
 	cairo_set_source_surface(cr, logo, w - 1536, 0);
 	cairo_paint(cr);
 
 	cairo_surface_destroy(logo);
+}
+
+void draw_background(void)
+{
+	cairo_set_source_rgb(cr, 0.96, 0.96, 0.96);
+	cairo_rectangle(cr, 0, BANNER_HEIGHT, w, h - BANNER_HEIGHT);
+	cairo_fill(cr);
 }
 
 void draw_text(int x, int y, int w, int h, const char *text, int size)
@@ -108,7 +116,7 @@ void draw_button(int n, int t, bool side, bool pressed, const char *text)
 	int x, y;
 
 	x = side ? w - BUTTON_PADDING - BUTTON_WIDTH : BUTTON_PADDING;
-	y = BANNER_HEIGHT * h + (h - BANNER_HEIGHT * h) / 2 -
+	y = BANNER_HEIGHT + (h - BANNER_HEIGHT) / 2 -
 			(t * (BUTTON_HEIGHT + BUTTON_PADDING)) / 2 +
 			n * (BUTTON_HEIGHT + BUTTON_PADDING);
 
@@ -130,8 +138,7 @@ void draw_pin(void)
 	cairo_set_source_rgb(cr, 0.69, 0.75, 0.77);
 
 	x = w / 2 - PINBOX_WIDTH / 2;
-	y = BANNER_HEIGHT * h + (h - BANNER_HEIGHT * h) / 2 -
-			TEXTBOX_HEIGHT / 2;
+	y = BANNER_HEIGHT + (h - BANNER_HEIGHT) / 2 - TEXTBOX_HEIGHT / 2;
 
 	cairo_rectangle(cr, x, y, PINBOX_WIDTH, TEXTBOX_HEIGHT);
 	cairo_fill(cr);

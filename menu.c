@@ -38,8 +38,7 @@ struct menu {
 			buttons_right[BUTTON_MAX];
 };
 
-/* static int		menu = MENU_STANDBY; */
-static int		menu = MENU_MAIN;
+static int		menu = MENU_STANDBY;
 static struct button	*pressed;
 
 static void withdraw(void)
@@ -49,11 +48,19 @@ static void withdraw(void)
 
 static struct menu menus[] = {
 	[MENU_STANDBY] = {
+#if 0
 		.mode = MODE_STANDBY
+#else
+		.mode = MODE_BUTTONS,
+		.message = "Please insert your card",
+		.buttons_right = {
+			{ "OK", { .menu = MENU_MAIN } }
+		}
+#endif
 	},
 	[MENU_PINENTRY] = {
 		.mode = MODE_PIN,
-		.message = "Please enter your PIN using the keypad"
+		.message = "Please enter your PIN"
 	},
 	[MENU_MAIN] = {
 		.mode = MODE_BUTTONS,
@@ -70,21 +77,21 @@ static struct menu menus[] = {
 		.mode = MODE_BUTTONS,
 		.message = "Please choose the desired amount",
 		.buttons_left = {
-			{ "€ 10", { .handler = &withdraw } },
-			{ "€ 20", { .handler = &withdraw } },
-			{ "€ 50", { .handler = &withdraw } },
-			{ "€ 100", { .handler = &withdraw } }
+			{ "EUR 10", { .handler = &withdraw } },
+			{ "EUR 20", { .handler = &withdraw } },
+			{ "EUR 50", { .handler = &withdraw } },
+			{ "EUR 100", { .handler = &withdraw } }
 		},
 		.buttons_right = {
-			{ "€ 200", { .handler = &withdraw } },
-			{ "€ 500", { .handler = &withdraw } },
+			{ "EUR 200", { .handler = &withdraw } },
+			{ "EUR 500", { .handler = &withdraw } },
 			{ "Custom", { .menu = MENU_WITHDRAWN } },
 			{ "Back", { .menu = MENU_MAIN } }
 		}
 	},
 	[MENU_WITHDRAWN] = {
 		.mode = MODE_AMOUNT,
-		.message = "Please enter the desired amount using the keypad",
+		.message = "Please enter the desired amount in EUR",
 		.buttons_right = {
 			{ "Back", { .menu = MENU_WITHDRAW } }
 		}
@@ -105,7 +112,7 @@ static struct menu menus[] = {
 	},
 	[MENU_PINCHANGE] = {
 		.mode = MODE_PIN,
-		.message = "Please enter your current PIN using the keypad",
+		.message = "Please enter your current PIN",
 		.buttons_right = {
 			{ "Back", { .menu = MENU_MAIN } }
 		}
@@ -136,7 +143,7 @@ static struct button *_button_check(struct button *btns, bool side,
 	for (i = 0; i < n; i++) {
 		x_btn = side ? w - BUTTON_PADDING - BUTTON_WIDTH :
 			BUTTON_PADDING;
-		y_btn = BANNER_HEIGHT * h + (h - BANNER_HEIGHT * h) / 2 -
+		y_btn = BANNER_HEIGHT + (h - BANNER_HEIGHT) / 2 -
 				(n * (BUTTON_HEIGHT + BUTTON_PADDING)) / 2 +
 				i * (BUTTON_HEIGHT + BUTTON_PADDING);
 
@@ -179,9 +186,13 @@ bool button_check(bool press, int x, int y)
 
 void draw_menu(void)
 {
+	/* Only really has to be drawn the first time */
+	if (menu == MENU_STANDBY)
+		draw_banner();
 	draw_background();
 
-	draw_text(0, h * 0.85, w, 0, menus[menu].message, 32);
+	draw_text(0, h - (h - BANNER_HEIGHT) / 5, w, 0,
+			menus[menu].message, 32);
 
 	switch (menus[menu].mode) {
 	case MODE_MESSAGE:
