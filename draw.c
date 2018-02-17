@@ -25,12 +25,75 @@
 #define BUTTON_WIDTH	150
 #define BUTTON_HEIGHT	75
 #define BUTTON_PADDING	20
+#define BUTTON_MAX	4
 
 #define BULLET_RADIUS	40
 #define BULLET_PADDING	40
 
 #define TEXTBOX_HEIGHT	(BULLET_PADDING * 2 + BULLET_RADIUS)
 #define TEXTBOX_WIDTH	(BULLET_PADDING + (BULLET_RADIUS * 2 + BULLET_PADDING) * TEXT_BUFFER)
+
+struct button {
+	const char	*text;
+	void		*handler;
+};
+
+struct menu {
+	int			mode;
+	const char		*text;
+	const struct button	buttons_left[BUTTON_MAX],
+				buttons_right[BUTTON_MAX];
+};
+
+static struct menu menus[] = {
+	[MENU_STANDBY] = {
+		.mode = MODE_STANDBY
+	},
+	[MENU_PINENTRY] = {
+		.mode = MODE_PIN
+	},
+	[MENU_MAIN] = {
+		.mode = MODE_BUTTONS,
+		.buttons_left = {
+			{ "Withdraw", NULL },
+			{ "Deposit", NULL }
+		},
+		.buttons_right = {
+			{ "Accounts", NULL },
+			{ "Change PIN", NULL }
+		}
+	},
+	[MENU_WITHDRAW] = {
+		.mode = MODE_BUTTONS,
+		.buttons_left = {
+			{ "€ 10", NULL },
+			{ "€ 20", NULL },
+			{ "€ 50", NULL },
+			{ "€ 100", NULL }
+		},
+		.buttons_right = {
+			{ "€ 200", NULL },
+			{ "€ 500", NULL },
+			{ "Custom", NULL },
+			{ "Back", NULL }
+		}
+	},
+	[MENU_WITHDRAWN] = {
+		.mode = MODE_AMOUNT
+	},
+	[MENU_DEPOSIT] = {
+		.mode = MODE_AMOUNT
+	},
+	[MENU_ACCOUNTS] = {
+		.mode = MODE_BUTTONS,
+		.buttons_right = {
+			{ "Back", NULL }
+		}
+	},
+	[MENU_PINCHANGE] = {
+		.mode = MODE_PIN
+	}
+};
 
 static xcb_connection_t	*conn;
 static xcb_screen_t	*screen;
@@ -42,11 +105,11 @@ static uint16_t		w, h;
 static cairo_t		*cr;
 static cairo_surface_t	*sur;
 
-static const char		font_desc[] = "sans-serif 16";
+static const char		font_desc[] = "sans-serif";
 static PangoFontDescription	*font;
 
-/* static uint8_t		mode = MODE_STANDBY; */
-static uint8_t		mode = MODE_PINENTRY;
+/* static int		menu = MENU_STANDBY; */
+static int		menu = MENU_MAIN;
 static char		buf[TEXT_BUFFER + 1];
 static unsigned char	bufi;
 
@@ -88,10 +151,11 @@ static int texth(cairo_t *cr, const char *text)
 	return h;
 }
 
-void text_draw(int x, int y, int w, int h, const char *text)
+void text_draw(int x, int y, int w, int h, const char *text, int size)
 {
 	PangoLayout *layout;
 
+	pango_font_description_set_size(font, size * PANGO_SCALE);
 	layout = pango_cairo_create_layout(cr);
 
 	cairo_move_to(cr, x + (w / 2) - (textw(cr, text) / 2),
@@ -147,19 +211,25 @@ static void draw_button(int n, int t, bool side, bool pressed, const char *text)
 	cairo_rectangle(cr, x, y, BUTTON_WIDTH, BUTTON_HEIGHT);
 	cairo_fill(cr);
 
-	text_draw(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, text);
+	text_draw(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, text, 16);
 }
 
-static void menu_standby(void)
+static void draw_buttons(const struct button *btns, bool side)
 {
-	/* cairo_set_source_rgb(cr, 0, 0, 0); */
+	int i, n;
+
+	if (!btns)
+		return;
+
+	for (n = 0; btns[n].text && n < BUTTON_MAX; n++);
+
+	for (i = 0; i < n; i++)
+		draw_button(i, n, side, 0, btns[i].text);
 }
 
-static void menu_pinentry(void)
+static void draw_pin(void)
 {
 	int x, y, i;
-
-	draw_background();
 
 	cairo_set_source_rgb(cr, 0.69, 0.75, 0.77);
 
@@ -178,68 +248,28 @@ static void menu_pinentry(void)
 				0, 2 * M_PI);
 		cairo_fill(cr);
 	}
-
-	x = w / 2;
-	y = h - 420;
-
-	text_draw(x, y, 420, 420, "hi");
 }
 
-static void menu_main(void)
+static void draw_menu(void)
 {
 	draw_background();
 
-	draw_button(0, 2, 0, 0, "Withdraw");
-	draw_button(1, 2, 0, 0, "Deposit");
-	draw_button(0, 2, 1, 0, "Accounts");
-	draw_button(1, 2, 1, 0, "Change PIN");
-}
-
-static void menu_withdraw(void)
-{
-	draw_background();
-
-	draw_button(0, 4, 0, 0, "€ 5");
-	draw_button(1, 4, 0, 0, "€ 10");
-	draw_button(2, 4, 0, 0, "€ 20");
-	draw_button(3, 4, 0, 0, "€ 50");
-	draw_button(0, 4, 1, 0, "€ 100");
-	draw_button(1, 4, 1, 0, "€ 200");
-	draw_button(2, 4, 1, 0, "€ 500");
-	draw_button(3, 4, 1, 0, "Custom");
-}
-
-static void menu_withdrawm(void)
-{
-	draw_background();
-
-	/* TODO Enter custom amount */
-}
-
-static void draw_menu()
-{
-	switch (mode) {
-	case MODE_PINENTRY:
-		menu_pinentry();
+	switch (menus[menu].mode) {
+	case MODE_MESSAGE:
+		/* TODO */
 		break;
-	case MODE_MAIN:
-		menu_main();
+	case MODE_BUTTONS:
+		draw_buttons(menus[menu].buttons_left, 0);
+		draw_buttons(menus[menu].buttons_right, 1);
 		break;
-	case MODE_WITHDRAW:
-		menu_withdraw();
+	case MODE_AMOUNT:
+		/* TODO */
 		break;
-	case MODE_DEPOSIT:
-		/* menu_deposit(); */
-		break;
-	case MODE_ACCOUNTS:
-		/* menu_accounts(); */
-		break;
-	case MODE_PINCHANGE:
-		/* menu_pinchange(); */
+	case MODE_PIN:
+		draw_pin();
 		break;
 	case MODE_STANDBY:
 	default:
-		menu_standby();
 		break;
 	}
 
@@ -287,8 +317,7 @@ static void text_update(xcb_key_press_event_t *e)
 {
 	xcb_keysym_t keysym;
 
-	if (mode != MODE_PINENTRY && mode != MODE_WITHDRAWM &&
-			mode != MODE_PINCHANGE)
+	if (menus[menu].mode != MODE_PIN && menus[menu].mode != MODE_AMOUNT)
 		return;
 
 	keysym = xcb_key_symbols_get_keysym(keysyms, e->detail, 0);
@@ -365,8 +394,10 @@ static void text_update(xcb_key_press_event_t *e)
 
 static void font_init(void)
 {
-	if (!(font = pango_font_description_from_string(font_desc)))
-		die("invalid font: %s\n", font);
+	if (!(font = pango_font_description_new()))
+		die("unable to allocate new font\n");
+
+	pango_font_description_set_family_static(font, font_desc);
 }
 
 static void font_fini(void)
