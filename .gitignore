@@ -1,3 +1,5 @@
 *.swp
 *.o
-kech
+
+atm/kech-atm
+server/kech-server
