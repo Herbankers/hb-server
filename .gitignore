@@ -1,5 +1,6 @@
-*.swp
 *.o
+*.pem
+*.swp
 
 atm/kech-atm
 server/kech-server

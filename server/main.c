@@ -1,6 +1,8 @@
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -16,12 +18,12 @@
 #include <openssl/err.h>
 
 static char *ip = "localhost";
-static uint16_t port;
+static uint16_t port = 80;
 static char *cert, *key;
 
 static bool verbose;
 
-SSL_CTX *init(void)
+static SSL_CTX *init(void)
 {
 	const SSL_METHOD *met;
 	SSL_CTX *ctx = NULL;
@@ -74,9 +76,10 @@ err:
 	return NULL;
 }
 
-int run(void)
+static int run(void)
 {
 	struct sockaddr_in server, client;
+	char addr_buf[INET_ADDRSTRLEN];
 	int sock, csock;
 	socklen_t socklen;
 
@@ -100,17 +103,23 @@ int run(void)
 	}
 
 	printf("waiting for connections...\n");
-	if (listen(sock, 5 /* SOMAXCONN */) < 0) {
+	if (listen(sock, 1 /* SOMAXCONN */) < 0) {
 		fprintf(stderr, "%s\n", strerror(errno));
 		return 1;
 	}
 
 	/* Wait for clients */
 	socklen = sizeof(client);
-	while ((csock = accept(sock, (struct sockaddr *) &client, &socklen))
-			> 0) {
-		printf("new incoming connection from %x:%u",
-				client.sin_addr.s_addr, ntohs(client.sin_port));
+	for (;;) {
+		if ((csock = accept(sock, (struct sockaddr *) &client,
+						&socklen)) < 0) {
+			fprintf(stderr, "%s\n", strerror(errno));
+		}
+
+		inet_ntop(AF_INET, &client.sin_addr, addr_buf, INET_ADDRSTRLEN);
+		printf("new incoming connection from %s:%u\n", addr_buf,
+				ntohs(client.sin_port));
+		fflush(stdout);
 
 		/* TODO Create thread and handle connection */
 	}
@@ -118,7 +127,7 @@ int run(void)
 	return 0;
 }
 
-void usage(char *prog)
+static void usage(char *prog)
 {
 	printf("Usage: %s [OPTION...]\n\n%s", prog,
 			"  -i IP ADDRESS        ip address to bind socket to\n"
