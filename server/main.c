@@ -10,23 +10,31 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <openssl/rsa.h>
-#include <openssl/crypto.h>
-#include <openssl/x509.h>
-#include <openssl/pem.h>
+/* #include <openssl/rsa.h> */
+/* #include <openssl/crypto.h> */
+/* #include <openssl/x509.h> */
+/* #include <openssl/pem.h> */
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+
+#include "kbp.h"
 
 static char *ip = "localhost";
 static uint16_t port = 80;
 static char *cert, *key;
 
+static SSL_CTX *ctx;
+
+struct connection {
+	int sock;
+};
+
+const pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static bool verbose;
 
-static SSL_CTX *init(void)
+static int init(void)
 {
 	const SSL_METHOD *met;
-	SSL_CTX *ctx = NULL;
 
 	/* Initialize OpenSSL */
 	if (verbose)
@@ -67,13 +75,65 @@ static SSL_CTX *init(void)
 	if (verbose)
 		printf("OpenSSL has been successfully initialized\n");
 
-	return ctx;
+	return 0;
 
 err:
 	ERR_print_errors_fp(stderr);
 	SSL_CTX_free(ctx);
 
-	return NULL;
+	return -1;
+}
+
+static void *conn(void *ssl)
+{
+	struct kbp_request req;
+	struct kbp_reply rep;
+	bool exit = 0;
+
+	if (SSL_accept(ssl) != 1)
+		fprintf(stderr, "handshake failed, terminating connection\n");
+
+	/* TODO Verify certificate */
+
+	rep.magic = KBP_MAGIC;
+
+	char test[] = "Hello World";
+
+	while (!exit) {
+		if (SSL_read(ssl, &req, sizeof(req)) <= 0) {
+			fprintf(stderr, "unable to process request\n");
+			continue;
+		}
+		if (req.magic != KBP_MAGIC || !req.type) {
+			fprintf(stderr, "invalid request\n");
+			continue;
+		}
+
+		/* rep.length = 0; */
+		rep.length = sizeof(test);
+
+		if (SSL_write(ssl, &rep, sizeof(rep)) <= 0) {
+			fprintf(stderr, "unable to write to socket\n");
+			continue;
+		}
+
+		/* Check if header is received correctly */
+		if (SSL_read(ssl, &req, sizeof(req)) <= 0) {
+			fprintf(stderr, "unable to process request\n");
+			continue;
+		}
+		if (req.type != KBP_T_HEAD_OK) {
+			fprintf(stderr, "invalid request handshake\n");
+			continue;
+		}
+
+		if (SSL_write(ssl, test, sizeof(test)) <= 0)
+			fprintf(stderr, "unable to write to socket\n");
+
+		exit = 1;
+	}
+
+	pthread_exit(NULL);
 }
 
 static int run(void)
@@ -82,12 +142,13 @@ static int run(void)
 	char addr_buf[INET_ADDRSTRLEN];
 	int sock, csock;
 	socklen_t socklen;
+	SSL *ssl;
 
 	/* Create the socket */
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		fprintf(stderr, "unable to create socket: %s\n",
 				strerror(errno));
-		return 1;
+		return -1;
 	}
 
 	/* Bind the socket */
@@ -99,18 +160,20 @@ static int run(void)
 		printf("binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
 		fprintf(stderr, "unable to bind socket: %s\n", strerror(errno));
-		return 1;
+		return -1;
 	}
 
 	printf("waiting for connections...\n");
 	if (listen(sock, 1 /* SOMAXCONN */) < 0) {
 		fprintf(stderr, "%s\n", strerror(errno));
-		return 1;
+		return -1;
 	}
 
 	/* Wait for clients */
 	socklen = sizeof(client);
 	for (;;) {
+		pthread_t thread;
+
 		if ((csock = accept(sock, (struct sockaddr *) &client,
 						&socklen)) < 0) {
 			fprintf(stderr, "%s\n", strerror(errno));
@@ -121,7 +184,17 @@ static int run(void)
 				ntohs(client.sin_port));
 		fflush(stdout);
 
-		/* TODO Create thread and handle connection */
+		if (!(ssl = SSL_new(ctx)))
+			fprintf(stderr, "unable to create SSL structure\n");
+		SSL_set_fd(ssl, csock);
+
+		if (pthread_create(&thread, NULL, conn, ssl)) {
+			fprintf(stderr, "unable to create connection thread\n");
+			SSL_free(ssl);
+			close(csock);
+		}
+
+		pthread_join(thread, NULL);
 	}
 
 	return 0;
@@ -139,9 +212,16 @@ static void usage(char *prog)
 			);
 }
 
+static void fini(void)
+{
+	free(cert);
+	free(key);
+	SSL_CTX_free(ctx);
+	pthread_exit(NULL);
+}
+
 int main(int argc, char **argv)
 {
-	SSL_CTX *ctx;
 	char c;
 
 	/* Parse arguments */
@@ -199,18 +279,16 @@ int main(int argc, char **argv)
 	if (verbose)
 		printf("the server will be hosted on %s:%u\n", ip, port);
 
-	if (!(ctx = init()))
+	if (init() < 0)
 		goto err;
 
-	if (run() != 0)
+	if (run() < 0)
 		goto err;
 
+	fini();
 	return 0;
 
 err:
-	free(cert);
-	free(key);
-	SSL_CTX_free(ctx);
-
+	fini();
 	return 1;
 }
