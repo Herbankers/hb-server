@@ -26,7 +26,8 @@ static char *cert, *key;
 static SSL_CTX *ctx;
 
 struct connection {
-	int sock;
+	int			sock;
+	struct sockaddr_in	addr;
 };
 
 const pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -84,65 +85,111 @@ err:
 	return -1;
 }
 
-static void *conn(void *ssl)
+static void *session(void *_conn)
 {
+	struct connection *conn = _conn;
 	struct kbp_request req;
 	struct kbp_reply rep;
-	bool exit = 0;
-
-	if (SSL_accept(ssl) != 1)
-		fprintf(stderr, "handshake failed, terminating connection\n");
-
-	/* TODO Verify certificate */
+	char addr[INET_ADDRSTRLEN];
+	int errcnt = 0;
+	SSL *ssl;
 
 	rep.magic = KBP_MAGIC;
 
+	/* Get client IP */
+	inet_ntop(AF_INET, &conn->addr.sin_addr, addr,
+			INET_ADDRSTRLEN);
+	printf("%s: new connection @ port %u\n", addr,
+			ntohs(conn->addr.sin_port));
+	fflush(stdout);
+
+	/* Setup an SSL/TLS connection */
+	if (!(ssl = SSL_new(ctx)))
+		fprintf(stderr, "unable to allocate SSL structure\n");
+	SSL_set_fd(ssl, conn->sock);
+
+	if (SSL_accept(ssl) != 1) {
+		fprintf(stderr, "%s: SSL error\n", conn->addr);
+		goto ret;
+	}
+
+	/* TODO Verify certificate */
+
 	char test[] = "Hello World";
 
-	while (!exit) {
+	for (;;) {
+		/* Check if maximum error count hasn't been exceeded. */
+		if (errcnt > KBP_ERROR_MAX) {
+			fprintf(stderr, "%s: maximum error count (%d) has been "
+					"exceeded, terminating connection",
+					addr, KBP_ERROR_MAX);
+			break;
+		}
+
+		/* Wait for requests from the client */
 		if (SSL_read(ssl, &req, sizeof(req)) <= 0) {
-			fprintf(stderr, "unable to process request\n");
+			fprintf(stderr, "%s: read error\n", addr);
+			errcnt++;
 			continue;
 		}
 		if (req.magic != KBP_MAGIC || !req.type) {
-			fprintf(stderr, "invalid request\n");
+			fprintf(stderr, "%s: invalid request\n", addr);
+			errcnt++;
 			continue;
 		}
 
+		if (req.type == KBP_T_CLOSE)
+			break;
+
+		/* TODO Process request */
+
 		/* rep.length = 0; */
 		rep.length = sizeof(test);
+		rep.status = KBP_S_OK;
 
 		if (SSL_write(ssl, &rep, sizeof(rep)) <= 0) {
-			fprintf(stderr, "unable to write to socket\n");
+			fprintf(stderr, "%s: header write error\n", addr);
+			errcnt++;
 			continue;
 		}
 
 		/* Check if header is received correctly */
 		if (SSL_read(ssl, &req, sizeof(req)) <= 0) {
-			fprintf(stderr, "unable to process request\n");
+			fprintf(stderr, "%s: header read error\n", addr);
+			errcnt++;
 			continue;
 		}
 		if (req.type != KBP_T_HEAD_OK) {
-			fprintf(stderr, "invalid request handshake\n");
+			fprintf(stderr, "%s: invalid reply\n", addr);
+			errcnt++;
 			continue;
 		}
 
-		if (SSL_write(ssl, test, sizeof(test)) <= 0)
-			fprintf(stderr, "unable to write to socket\n");
-
-		exit = 1;
+		/* Finally, send back the requested data */
+		if (SSL_write(ssl, test, sizeof(test)) <= 0) {
+			fprintf(stderr, "%s: write error\n", addr);
+			errcnt++;
+		}
 	}
+
+	printf("%s: terminating connection\n", addr);
+	fflush(stdout);
+
+ret:
+	/* Close the connection */
+	close(conn->sock);
+	SSL_free(ssl);
 
 	pthread_exit(NULL);
 }
 
 static int run(void)
 {
-	struct sockaddr_in server, client;
-	char addr_buf[INET_ADDRSTRLEN];
+	struct connection conn;
+	struct sockaddr_in server;
+	pthread_t thread;
 	int sock, csock;
 	socklen_t socklen;
-	SSL *ssl;
 
 	/* Create the socket */
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -164,33 +211,22 @@ static int run(void)
 	}
 
 	printf("waiting for connections...\n");
-	if (listen(sock, 1 /* SOMAXCONN */) < 0) {
+	if (listen(sock, SOMAXCONN) < 0) {
 		fprintf(stderr, "%s\n", strerror(errno));
 		return -1;
 	}
 
 	/* Wait for clients */
-	socklen = sizeof(client);
+	socklen = sizeof(struct sockaddr_in);
 	for (;;) {
-		pthread_t thread;
-
-		if ((csock = accept(sock, (struct sockaddr *) &client,
+		if ((conn.sock = accept(sock, (struct sockaddr *) &conn.addr,
 						&socklen)) < 0) {
 			fprintf(stderr, "%s\n", strerror(errno));
 		}
 
-		inet_ntop(AF_INET, &client.sin_addr, addr_buf, INET_ADDRSTRLEN);
-		printf("new incoming connection from %s:%u\n", addr_buf,
-				ntohs(client.sin_port));
-		fflush(stdout);
-
-		if (!(ssl = SSL_new(ctx)))
-			fprintf(stderr, "unable to create SSL structure\n");
-		SSL_set_fd(ssl, csock);
-
-		if (pthread_create(&thread, NULL, conn, ssl)) {
-			fprintf(stderr, "unable to create connection thread\n");
-			SSL_free(ssl);
+		/* Create a thread for new connections */
+		if (pthread_create(&thread, NULL, session, &conn)) {
+			fprintf(stderr, "unable to allocate thread\n");
 			close(csock);
 		}
 
