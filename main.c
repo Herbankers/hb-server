@@ -1,4 +1,3 @@
-#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
@@ -10,28 +9,23 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <mysql/mysql.h>
+
 /* #include <openssl/rsa.h> */
 /* #include <openssl/crypto.h> */
 /* #include <openssl/x509.h> */
 /* #include <openssl/pem.h> */
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 
+#include "kech.h"
 #include "kbp.h"
 
-static char *ip = "localhost";
-static uint16_t port = 80;
+static uint16_t port = KBP_PORT;
 static char *cert, *key;
+bool verbose;
 
-static SSL_CTX *ctx;
-
-struct connection {
-	int			sock;
-	struct sockaddr_in	addr;
-};
-
-const pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static bool verbose;
+SSL_CTX *ctx;
 
 static int init(void)
 {
@@ -80,115 +74,22 @@ static int init(void)
 
 err:
 	ERR_print_errors_fp(stderr);
-	SSL_CTX_free(ctx);
+	if (ctx)
+		SSL_CTX_free(ctx);
 
 	return -1;
 }
 
-static void *session(void *_conn)
-{
-	struct connection *conn = _conn;
-	struct kbp_request req;
-	struct kbp_reply rep;
-	char addr[INET_ADDRSTRLEN];
-	int errcnt = 0;
-	SSL *ssl;
-
-	rep.magic = KBP_MAGIC;
-
-	/* Get client IP */
-	inet_ntop(AF_INET, &conn->addr.sin_addr, addr,
-			INET_ADDRSTRLEN);
-	printf("%s: new connection @ port %u\n", addr,
-			ntohs(conn->addr.sin_port));
-	fflush(stdout);
-
-	/* Setup an SSL/TLS connection */
-	if (!(ssl = SSL_new(ctx)))
-		fprintf(stderr, "unable to allocate SSL structure\n");
-	SSL_set_fd(ssl, conn->sock);
-
-	if (SSL_accept(ssl) != 1) {
-		fprintf(stderr, "%s: SSL error\n", conn->addr);
-		goto ret;
-	}
-
-	/* TODO Verify certificate */
-
-	char test[] = "Hello World";
-
-	for (;;) {
-		/* Check if maximum error count hasn't been exceeded. */
-		if (errcnt > KBP_ERROR_MAX) {
-			fprintf(stderr, "%s: maximum error count (%d) has been "
-					"exceeded, terminating connection",
-					addr, KBP_ERROR_MAX);
-			break;
-		}
-
-		/* Wait for requests from the client */
-		if (SSL_read(ssl, &req, sizeof(req)) <= 0) {
-			fprintf(stderr, "%s: read error\n", addr);
-			errcnt++;
-			continue;
-		}
-		if (req.magic != KBP_MAGIC || !req.type) {
-			fprintf(stderr, "%s: invalid request\n", addr);
-			errcnt++;
-			continue;
-		}
-
-		if (req.type == KBP_T_CLOSE)
-			break;
-
-		/* TODO Process request */
-
-		/* rep.length = 0; */
-		rep.length = sizeof(test);
-		rep.status = KBP_S_OK;
-
-		if (SSL_write(ssl, &rep, sizeof(rep)) <= 0) {
-			fprintf(stderr, "%s: header write error\n", addr);
-			errcnt++;
-			continue;
-		}
-
-		/* Check if header is received correctly */
-		if (SSL_read(ssl, &req, sizeof(req)) <= 0) {
-			fprintf(stderr, "%s: header read error\n", addr);
-			errcnt++;
-			continue;
-		}
-		if (req.type != KBP_T_HEAD_OK) {
-			fprintf(stderr, "%s: invalid reply\n", addr);
-			errcnt++;
-			continue;
-		}
-
-		/* Finally, send back the requested data */
-		if (SSL_write(ssl, test, sizeof(test)) <= 0) {
-			fprintf(stderr, "%s: write error\n", addr);
-			errcnt++;
-		}
-	}
-
-	printf("%s: terminating connection\n", addr);
-	fflush(stdout);
-
-ret:
-	/* Close the connection */
-	close(conn->sock);
-	SSL_free(ssl);
-
-	pthread_exit(NULL);
-}
-
+/*
+ * TODO Handle SIGNALS for server termination, like waiting for clients to
+ * terminate
+ */
 static int run(void)
 {
-	struct connection conn;
+	struct connection *conn;
 	struct sockaddr_in server;
 	pthread_t thread;
-	int sock, csock;
+	int sock;
 	socklen_t socklen;
 
 	/* Create the socket */
@@ -219,18 +120,22 @@ static int run(void)
 	/* Wait for clients */
 	socklen = sizeof(struct sockaddr_in);
 	for (;;) {
-		if ((conn.sock = accept(sock, (struct sockaddr *) &conn.addr,
+		if (!(conn = malloc(sizeof(struct connection)))) {
+			fprintf(stderr, "unable to allocate connection "
+					"structure\n");
+			continue;
+		}
+
+		if ((conn->sock = accept(sock, (struct sockaddr *) &conn->addr,
 						&socklen)) < 0) {
 			fprintf(stderr, "%s\n", strerror(errno));
 		}
 
 		/* Create a thread for new connections */
-		if (pthread_create(&thread, NULL, session, &conn)) {
+		if (pthread_create(&thread, NULL, session, conn)) {
 			fprintf(stderr, "unable to allocate thread\n");
-			close(csock);
+			close(conn->sock);
 		}
-
-		pthread_join(thread, NULL);
 	}
 
 	return 0;
@@ -250,9 +155,12 @@ static void usage(char *prog)
 
 static void fini(void)
 {
+	mysql_library_end();
+
+	SSL_CTX_free(ctx);
+
 	free(cert);
 	free(key);
-	SSL_CTX_free(ctx);
 	pthread_exit(NULL);
 }
 
@@ -263,10 +171,6 @@ int main(int argc, char **argv)
 	/* Parse arguments */
 	while ((c = getopt(argc, argv, "i:p:c:k:hv")) != -1) {
 		switch (c) {
-		/* IP address */
-		case 'i':
-			/* TODO */
-			break;
 		/* Port number */
 		case 'p':
 			port = strtol(optarg, NULL, 10);
@@ -313,10 +217,12 @@ int main(int argc, char **argv)
 	printf("welcome to the Kech Bank server!\n");
 
 	if (verbose)
-		printf("the server will be hosted on %s:%u\n", ip, port);
+		printf("the server will be hosted on localhost:%u\n", port);
 
 	if (init() < 0)
 		goto err;
+
+	mysql_library_init(0, 0, NULL);
 
 	if (run() < 0)
 		goto err;
