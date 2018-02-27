@@ -1,6 +1,6 @@
 /*
  *
- * kech-client
+ * kech-server
  * session.c
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -41,56 +41,52 @@
 #include "kech.h"
 
 struct token {
-	bool	valid;
-	char	iban[KBP_IBAN_MAX + 1];
-	time_t	expiry_time;
+	bool		valid;
+	unsigned int	customer_id;
+	char		iban[KBP_IBAN_MAX + 1];
+	time_t		expiry_time;
 };
 
-static int accounts_get(char **buf)
+static int accounts_get(MYSQL *sql, struct token *tok, char **buf)
 {
-	free(*buf);
-	*buf = NULL;
-
-	/* TODO */
-
-	return -1;
-}
-
-static int balance_get(MYSQL *sql, char **buf)
-{
-	char iban[KBP_IBAN_MAX + 1];
-	char *_q, *q = NULL;
+	struct kbp_reply_account *a;
 	MYSQL_RES *res = NULL;
 	MYSQL_ROW row;
-	int64_t *val;
+	char *_q, *q = NULL;
+	int n = 0;
 
-	memcpy(&iban, *buf, KBP_IBAN_MAX + 1);
 	free(*buf);
 	*buf = NULL;
 
 	/* Prepare the query */
-	_q = "SELECT `balance` FROM `accounts` WHERE `iban` = '%s'";
-	if (!(q = malloc(strlen(_q) + strlen(iban))))
+	_q = "SELECT `iban`, `type`, `balance` FROM `accounts` "
+		"WHERE `customer_id` = %u";
+	if (!(q = malloc(snprintf(NULL, 0, _q, tok->customer_id) + 1)))
 		goto err;
-	sprintf(q, _q, iban);
+	sprintf(q, _q, tok->customer_id);
 
 	/* Run it */
 	if (mysql_query(sql, q))
 		goto err;
 	if (!(res = mysql_store_result(sql)))
 		goto err;
-	if (!(row = mysql_fetch_row(res)))
-		goto err;
 
-	/* Store the result */
-	if (!(val = malloc(sizeof(int64_t))))
+	/* Allocate and fill the array */
+	n = mysql_num_rows(res);
+	if (!(a = malloc(n * sizeof(struct kbp_reply_account))))
 		goto err;
-	*val = (int64_t) (strtod(row[0], NULL) * 100);
-	*buf = (char *) val;
+	*buf = (char *) a;
+
+	while ((row = mysql_fetch_row(res))) {
+		strncpy((*a).iban, row[0], KBP_IBAN_MAX);
+		(*a).type = strtol(row[1], NULL, 10);
+		(*a).balance = (int64_t) (strtod(row[2], NULL) * 100);
+		a++;
+	}
 
 	free(q);
 	mysql_free_result(res);
-	return sizeof(int64_t);
+	return n * sizeof(struct kbp_reply_account);
 
 err:
 	free(q);
@@ -124,6 +120,7 @@ static int login(char **buf, struct token *tok)
 	if (strcmp(l.pin, "1234") == 0) {
 		tok->valid = 1;
 		strncpy(tok->iban, l.iban, KBP_IBAN_MAX);
+		tok->customer_id = 1;
 		tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
 		return 0;
 	}
@@ -158,20 +155,126 @@ static int transfer(char **buf)
 	return -1;
 }
 
+static struct kbp_reply *process(struct kbp_request *req, struct token *tok,
+		char **buf, char *addr, MYSQL *sql)
+{
+	struct kbp_reply *rep;
+	int res;
+
+	if (!(rep = malloc(sizeof(struct kbp_reply)))) {
+		fprintf(stderr, "out of memory\n");
+		return NULL;
+	}
+
+	rep->magic = KBP_MAGIC;
+
+	/* Check if session hasn't timed out */
+	if (tok->valid) {
+		if (time(NULL) > tok->expiry_time) {
+			if (verbose)
+				printf("%s: session timeout: %s\n", addr,
+						tok->iban);
+
+			tok->valid = 0;
+			rep->status = KBP_S_TIMEOUT;
+			rep->length = 0;
+			return rep;
+		} else {
+			rep->status = KBP_S_INVALID;
+		}
+	} else if (req->type != KBP_T_LOGIN) {
+		rep->status = KBP_S_TIMEOUT;
+		rep->length = 0;
+		return rep;
+	}
+
+	/* Process the request */
+	switch (req->type) {
+	case KBP_T_ACCOUNTS:
+		if ((res = accounts_get(sql, tok, buf)) < 0)
+			rep->status = KBP_S_FAIL;
+		else
+			rep->status = KBP_S_OK;
+		break;
+	case KBP_T_PIN_UPDATE:
+		if (req->length != KBP_PIN_MAX + 1) {
+			rep->status = KBP_S_INVALID;
+			break;
+		}
+
+		if ((res = pin_update(buf)) < 0)
+			rep->status = KBP_S_FAIL;
+		else
+			rep->status = KBP_S_OK;
+		break;
+	case KBP_T_LOGIN:
+		if (req->length != sizeof(struct kbp_request_login)) {
+			rep->status = KBP_S_INVALID;
+			break;
+		}
+
+		if ((res = login(buf, tok)) < 0) {
+			rep->status = KBP_S_FAIL;
+		} else {
+			if (verbose)
+				printf("%s: session login: %s\n", addr,
+						tok->iban);
+			rep->status = KBP_S_OK;
+		}
+		break;
+	case KBP_T_LOGOUT:
+		if (verbose)
+			printf("%s: session logout: %s\n", addr, tok->iban);
+
+		tok->valid = 0;
+		rep->status = KBP_S_TIMEOUT;
+		res = 0;
+		break;
+	case KBP_T_TRANSACTIONS:
+		if (req->length != KBP_IBAN_MAX + 1) {
+			rep->status = KBP_S_INVALID;
+			break;
+		}
+
+		if ((res = transactions_get(buf)) < 0)
+			rep->status = KBP_S_FAIL;
+		else
+			rep->status = KBP_S_OK;
+		break;
+	case KBP_T_TRANSFER:
+		if (req->length != sizeof(struct kbp_request_transfer)) {
+			rep->status = KBP_S_INVALID;
+			break;
+		}
+
+		if ((res = transfer(buf)) < 0)
+			rep->status = KBP_S_FAIL;
+		else
+			rep->status = KBP_S_OK;
+		break;
+	/* Invalid or unimplemented request */
+	default:
+		res = 0;
+		break;
+	}
+
+	rep->length = (res < 0) ? 0 : res;
+
+	return rep;
+}
+
 void *session(void *_conn)
 {
 	struct connection *conn = _conn;
-	struct token tok;
 	struct kbp_request req;
-	struct kbp_reply rep;
-	char addr[INET_ADDRSTRLEN];
-	char *buf;
+	struct kbp_reply *rep;
+	struct token tok;
+	char *buf, addr[INET_ADDRSTRLEN];
 	int res, errcnt = 0;
 	MYSQL *sql = NULL;
 	SSL *ssl = NULL;
 
 	memset(&tok, 0, sizeof(tok));
-	rep.magic = KBP_MAGIC;
 
 	/* Get client IP */
 	inet_ntop(AF_INET, &conn->addr.sin_addr, addr,
@@ -199,13 +302,16 @@ void *session(void *_conn)
 		goto ret;
 	}
 
-	if (!mysql_real_connect(sql, "localhost", "root", "", "kech", 0, NULL,
-			0)) {
+	if (!mysql_real_connect(sql, sql_host, sql_user, sql_pass, sql_db,
+			sql_port, NULL, 0)) {
 		fprintf(stderr, "database connection error\n");
 		goto ret;
 	}
 
+	/* FIXME Do this more dynamically */
 	for (;;) {
+		rep = NULL;
+
 		/* Check if maximum error count hasn't been exceeded. */
 		if (errcnt > KBP_ERROR_MAX) {
 			fprintf(stderr, "%s: maximum error count (%d) has been "
@@ -229,7 +335,7 @@ void *session(void *_conn)
 		}
 
 		if (verbose)
-			printf("%s: request with type %u\n", addr, req.type);
+			printf("%s: new request %u\n", addr, req.type);
 
 		/* Read request data if available */
 		if (req.length) {
@@ -247,141 +353,35 @@ void *session(void *_conn)
 			buf = NULL;
 		}
 
-		/* Check if session hasn't timed out */
-		if (time(NULL) > tok.expiry_time) {
-			if (verbose)
-				printf("%s: session timeout: %s\n", addr,
-						tok.iban);
-			tok.valid = 0;
-			rep.status = KBP_S_TIMEOUT;
-		} else if (tok.valid) {
-			rep.status = KBP_S_INVALID;
-		} else {
-			rep.status = KBP_S_TIMEOUT;
-		}
-
-		res = 0;
-
 		/* Process the request */
-		switch (req.type) {
-		case KBP_T_ACCOUNTS:
-			if (!tok.valid)
-				break;
-
-			if ((res = accounts_get(&buf)) < 0)
-				rep.status = KBP_S_FAIL;
-			else
-				rep.status = KBP_S_OK;
-			break;
-		case KBP_T_BALANCE:
-			if (!tok.valid)
-				break;
-
-			if (req.length != KBP_IBAN_MAX + 1) {
-				rep.status = KBP_S_INVALID;
-				break;
-			}
-
-			if ((res = balance_get(sql, &buf)) < 0)
-				rep.status = KBP_S_FAIL;
-			else
-				rep.status = KBP_S_OK;
-			break;
-		case KBP_T_PIN_UPDATE:
-			if (!tok.valid)
-				break;
-
-			if (req.length != KBP_PIN_MAX + 1) {
-				rep.status = KBP_S_INVALID;
-				break;
-			}
-
-			if ((res = pin_update(&buf)) < 0)
-				rep.status = KBP_S_FAIL;
-			else
-				rep.status = KBP_S_OK;
-			break;
-		case KBP_T_LOGIN:
-			if (req.length != sizeof(struct kbp_request_login)) {
-				rep.status = KBP_S_INVALID;
-				break;
-			}
-
-			if ((res = login(&buf, &tok)) < 0) {
-				rep.status = KBP_S_FAIL;
-			} else {
-				if (verbose)
-					printf("%s: session login: %s\n", addr,
-							tok.iban);
-				rep.status = KBP_S_OK;
-			}
-			break;
-		case KBP_T_LOGOUT:
-			if (!tok.valid)
-				break;
-
-			if (verbose)
-				printf("%s: session logout: %s\n", addr,
-						tok.iban);
-
-			res = 0;
-			tok.valid = 0;
-			rep.status = KBP_S_TIMEOUT;
-			break;
-		case KBP_T_TRANSACTIONS:
-			if (!tok.valid)
-				break;
-
-			if (req.length != KBP_IBAN_MAX + 1) {
-				rep.status = KBP_S_INVALID;
-				break;
-			}
-
-			if ((res = transactions_get(&buf)) < 0)
-				rep.status = KBP_S_FAIL;
-			else
-				rep.status = KBP_S_OK;
-			break;
-		case KBP_T_TRANSFER:
-			if (!tok.valid)
-				break;
-
-			if (req.length != sizeof(struct kbp_request_transfer)) {
-				rep.status = KBP_S_INVALID;
-				break;
-			}
-
-			if ((res = transfer(&buf)) < 0)
-				rep.status = KBP_S_FAIL;
-			else
-				rep.status = KBP_S_OK;
-			break;
-		/* Invalid or unimplemented request */
-		default:
-			res = 0;
-			break;
+		if (!(rep = process(&req, &tok, &buf, addr, sql))) {
+			fprintf(stderr, "%s: error processing request\n", addr);
+			errcnt++;
+			goto next;
 		}
-		rep.length = (res < 0) ? 0 : res;
 
 		/* Send the header */
-		if (SSL_write(ssl, &rep, sizeof(rep)) <= 0) {
+		if (SSL_write(ssl, rep, sizeof(struct kbp_reply)) <= 0) {
 			fprintf(stderr, "%s: header write error\n", addr);
 			errcnt++;
 			goto next;
 		}
 
 		/* Finally, send back the data */
-		if (rep.length && SSL_write(ssl, buf, rep.length) <= 0) {
-			fprintf(stderr, "%s: write error: %d\n", addr, rep.length);
+		if (rep->length && SSL_write(ssl, buf, rep->length) <= 0) {
+			fprintf(stderr, "%s: write error: %d\n", addr,
+					rep->length);
 			errcnt++;
 			goto next;
 		}
 
 		if (verbose)
-			printf("%s: request has been processed\n", addr);
+			printf("%s: request %u has been processed\n", addr,
+					req.type);
 
 next:
 		free(buf);
+		free(rep);
 	}
 
 ret:
@@ -395,7 +395,7 @@ ret:
 	/* Close the client connection */
 	close(conn->sock);
 	SSL_free(ssl);
-
 	free(_conn);
+
 	pthread_exit(NULL);
 }

@@ -1,6 +1,6 @@
 /*
  *
- * kech-client
+ * kech-server
  * kech.h
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -37,6 +37,8 @@ struct connection {
 
 extern bool verbose;
 extern SSL_CTX *ctx;
+extern char *sql_host, *sql_db, *sql_user, *sql_pass;
+extern uint16_t sql_port;
 
 void *session(void *_conn);
 

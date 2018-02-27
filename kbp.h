@@ -57,6 +57,17 @@
 
 
 /*
+ * Account types
+ */
+enum {
+	/* Checkings account */
+	KBP_A_CHECKING,
+	/* Savings account */
+	KBP_A_SAVINGS
+};
+
+
+/*
  * Request types
  */
 
@@ -67,18 +78,9 @@ enum {
 	 *
 	 * Needs: active session
 	 * Requests: -
-	 * Returns: struct kbp_reply_accounts[n]
+	 * Returns: struct kbp_reply_account[n]
 	 */
 	KBP_T_ACCOUNTS,
-	/*
-	 * Request the balance for iban, iban must belong to the user associated
-	 * with the active session.
-	 *
-	 * Needs: active session
-	 * Requests: char iban[KBP_IBAN_MAX + 1]
-	 * Returns: int64_t balance
-	 */
-	KBP_T_BALANCE,
 	/*
 	 * Request a PIN change for card that initiated the active session.
 	 *
@@ -187,6 +189,16 @@ struct kbp_reply {
 	int8_t		status;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
 	int32_t		length;
+};
+
+/* Account reply */
+struct kbp_reply_account {
+	/* IBAN */
+	char		iban[KBP_IBAN_MAX + 1];
+	/* Account type */
+	uint8_t		type;
+	/* Balance in EUR * 100 (2 decimal places) */
+	int64_t		balance;
 };
 
 /* Transaction reply */
