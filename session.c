@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
+#include <ctype.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -48,6 +49,16 @@ struct token {
 	uint32_t	card_id;
 	time_t		expiry_time;
 };
+
+/* TODO More checks */
+static bool isiban(const char *str)
+{
+	while (*str)
+		if (!isalnum(*str++))
+			return 0;
+
+	return 1;
+}
 
 static int accounts_get(MYSQL *sql, struct token *tok, char **buf)
 {
@@ -82,7 +93,7 @@ static int accounts_get(MYSQL *sql, struct token *tok, char **buf)
 	while ((row = mysql_fetch_row(res))) {
 		strncpy((*a).iban, row[0], KBP_IBAN_MAX);
 		(*a).type = strtol(row[1], NULL, 10);
-		(*a).balance = (int64_t) (strtod(row[2], NULL) * 100);
+		(*a).balance = strtoll(row[2], NULL, 10);
 		a++;
 	}
 
@@ -169,6 +180,91 @@ static int transactions_get(char **buf)
 	return -1;
 }
 
+static int ownsaccount(MYSQL *sql, struct token *tok, const char *iban)
+{
+	char *_q, *q = NULL;
+	MYSQL_RES *res = NULL;
+	int n;
+
+	/* Prepare the query */
+	_q = "SELECT 1 FROM `accounts` WHERE `customer_id` = %u AND "
+			"`iban` = '%s'";
+	if (!(q = malloc(snprintf(NULL, 0, _q, tok->customer_id, iban) + 1)))
+		goto err;
+	sprintf(q, _q, tok->customer_id, iban);
+
+	/* Run it */
+	if (mysql_query(sql, q))
+		goto err;
+	if (!(res = mysql_store_result(sql)))
+		goto err;
+
+	/* Check if there's any rows */
+	n = mysql_num_rows(res);
+
+	free(q);
+	mysql_free_result(res);
+	return n;
+
+err:
+	free(q);
+	mysql_free_result(res);
+	return -1;
+}
+
+static int modify(MYSQL *sql, const char *iban, int64_t d)
+{
+	char *_q, *q = NULL;
+	MYSQL_RES *res = NULL;
+	MYSQL_ROW row;
+	int64_t bal;
+
+	/* First, calculate the new balance */
+	_q = "SELECT `balance` FROM `accounts` WHERE `iban` = '%s'";
+	if (!(q = malloc(snprintf(NULL, 0, _q, iban) + 1)))
+		goto err;
+	sprintf(q, _q, iban);
+
+	/* Run it */
+	if (mysql_query(sql, q))
+		goto err;
+	if (!(res = mysql_store_result(sql)))
+		goto err;
+
+	/* Check if entry exists */
+	if (!(row = mysql_fetch_row(res)))
+		goto err;
+
+	/* Check if the new balance is positive, abort otherwise */
+	if ((bal = strtoll(row[0], NULL, 10) + d) < 0)
+		goto err;
+
+	/* Clean up */
+	free(q);
+	q = NULL;
+	mysql_free_result(res);
+	res = NULL;
+
+	/* Prepare the update */
+	_q = "UPDATE `accounts` SET `balance` = %lld WHERE `iban` = '%s'";
+	if (!(q = malloc(snprintf(NULL, 0, _q, bal, iban) + 1)))
+		goto err;
+	sprintf(q, _q, bal, iban);
+
+	/* Do it */
+	if (mysql_query(sql, q))
+		goto err;
+
+	free(q);
+	return bal;
+
+err:
+	free(q);
+	mysql_free_result(res);
+	return -1;
+}
+
+/* FIXME Not written very efficiently */
 static int transfer(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_request_transfer t;
@@ -177,11 +273,35 @@ static int transfer(MYSQL *sql, struct token *tok, char **buf)
 	free(*buf);
 	*buf = NULL;
 
-	/* TODO Check if IBAN is correct and doesn't contain SQL injections */
+	/* Check if the IBAN(s) are valid and exist in the database */
+	if (*t.iban_in) {
+		if (!isiban(t.iban_in))
+			return -1;
+		if (modify(sql, t.iban_in, 0) < 0)
+			return -1;
+	}
 
-	/* TODO */
+	if (*t.iban_out) {
+		if (!isiban(t.iban_out))
+			return -1;
+		if (modify(sql, t.iban_out, 0) < 0)
+			return -1;
+	}
 
-	return -1;
+	/* Check if one of the accounts is accessible with the active session */
+	if (ownsaccount(sql, tok, (*t.iban_in) ? t.iban_in : t.iban_out) <= 0)
+		return -1;
+
+	/* Perform the transaction */
+	if (*t.iban_in)
+		if (modify(sql, t.iban_in, -t.amount) < 0)
+			return -1;
+	if (*t.iban_out)
+		if (modify(sql, t.iban_in, t.amount) < 0)
+			if (*t.iban_in && modify(sql, t.iban_in, t.amount) < 0)
+				return -1;
+
+	return 0;
 }
 
 static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,

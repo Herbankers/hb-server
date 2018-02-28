@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS `accounts` (
 	`customer_id`	INTEGER UNSIGNED	NOT NULL,
 	`type`		TINYINT UNSIGNED	NOT NULL,
 	`iban`		VARCHAR(34)		NOT NULL UNIQUE,
-	`balance`	DECIMAL(15,2)		NOT NULL,
+	`balance`	BIGINT			NOT NULL,
 	PRIMARY KEY (`id`),
 	FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`)
 		ON DELETE RESTRICT ON UPDATE CASCADE
@@ -41,6 +41,6 @@ CREATE TABLE IF NOT EXISTS `transactions` (
 	`status`	TINYINT UNSIGNED	NOT NULL,
 	`src_iban`	VARCHAR(34),
 	`dst_iban`	VARCHAR(34),
-	`amount`	DECIMAL(15,2)		NOT NULL,
+	`amount`	BIGINT			NOT NULL,
 	PRIMARY KEY (`id`)
 );
