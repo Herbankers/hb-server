@@ -32,6 +32,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <libscrypt.h>
+
 #include <mysql/mysql.h>
 
 #include <openssl/err.h>
@@ -42,17 +44,17 @@
 
 struct token {
 	bool		valid;
-	unsigned int	customer_id;
-	char		iban[KBP_IBAN_MAX + 1];
+	uint32_t	customer_id;
+	uint32_t	card_id;
 	time_t		expiry_time;
 };
 
 static int accounts_get(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_reply_account *a;
+	char *_q, *q = NULL;
 	MYSQL_RES *res = NULL;
 	MYSQL_ROW row;
-	char *_q, *q = NULL;
 	int n = 0;
 
 	free(*buf);
@@ -60,7 +62,7 @@ static int accounts_get(MYSQL *sql, struct token *tok, char **buf)
 
 	/* Prepare the query */
 	_q = "SELECT `iban`, `type`, `balance` FROM `accounts` "
-		"WHERE `customer_id` = %u";
+		"WHERE `customer_id` = %u ORDER BY `type`";
 	if (!(q = malloc(snprintf(NULL, 0, _q, tok->customer_id) + 1)))
 		goto err;
 	sprintf(q, _q, tok->customer_id);
@@ -107,25 +109,50 @@ static int pin_update(char **buf)
 	return -1;
 }
 
-static int login(char **buf, struct token *tok)
+static int login(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_request_login l;
+	char *_q, *q = NULL;
+	MYSQL_RES *res = NULL;
+	MYSQL_ROW row;
 
 	memcpy(&l, *buf, sizeof(l));
 	free(*buf);
 	*buf = NULL;
 
-	/* TODO */
-#if 1
-	if (strcmp(l.pin, "1234") == 0) {
-		tok->valid = 1;
-		strncpy(tok->iban, l.iban, KBP_IBAN_MAX);
-		tok->customer_id = 1;
-		tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
-		return 0;
-	}
-#endif
+	/* Prepare the query */
+	_q = "SELECT `pin` FROM `cards` WHERE `customer_id` = %u AND "
+			"`card_id` = %u";
+	if (!(q = malloc(snprintf(NULL, 0, _q, l.customer_id, l.card_id) + 1)))
+		goto err;
+	sprintf(q, _q, l.customer_id, l.card_id);
 
+	/* Run it */
+	if (mysql_query(sql, q))
+		goto err;
+	if (!(res = mysql_store_result(sql)))
+		goto err;
+
+	/* Check if entry exists */
+	if (!(row = mysql_fetch_row(res)))
+		goto err;
+
+	/* Check if the entered password is correct */
+	if (libscrypt_check(row[0], l.pin) <= 0)
+		return -1;
+
+	tok->valid = 1;
+	tok->customer_id = l.customer_id;
+	tok->card_id = l.card_id;
+	tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
+
+	free(q);
+	mysql_free_result(res);
+	return 0;
+
+err:
+	free(q);
+	mysql_free_result(res);
 	return -1;
 }
 
@@ -142,7 +169,7 @@ static int transactions_get(char **buf)
 	return -1;
 }
 
-static int transfer(char **buf)
+static int transfer(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_request_transfer t;
 
@@ -150,42 +177,36 @@ static int transfer(char **buf)
 	free(*buf);
 	*buf = NULL;
 
+	/* TODO Check if IBAN is correct and doesn't contain SQL injections */
+
 	/* TODO */
 
 	return -1;
 }
 
-static struct kbp_reply *process(struct kbp_request *req, struct token *tok,
-		char **buf, char *addr, MYSQL *sql)
+static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
+		struct token *tok, struct kbp_reply *rep)
 {
-	struct kbp_reply *rep;
 	int res;
-
-	if (!(rep = malloc(sizeof(struct kbp_reply)))) {
-		fprintf(stderr, "out of memory\n");
-		return NULL;
-	}
-
-	rep->magic = KBP_MAGIC;
 
 	/* Check if session hasn't timed out */
 	if (tok->valid) {
 		if (time(NULL) > tok->expiry_time) {
 			if (verbose)
-				printf("%s: session timeout: %s\n", addr,
-						tok->iban);
+				printf("%s: session timeout: %u,%u\n", addr,
+						tok->customer_id, tok->card_id);
 
 			tok->valid = 0;
 			rep->status = KBP_S_TIMEOUT;
 			rep->length = 0;
-			return rep;
+			return 0;
 		} else {
 			rep->status = KBP_S_INVALID;
 		}
 	} else if (req->type != KBP_T_LOGIN) {
 		rep->status = KBP_S_TIMEOUT;
 		rep->length = 0;
-		return rep;
+		return 0;
 	}
 
 	/* Process the request */
@@ -213,18 +234,19 @@ static struct kbp_reply *process(struct kbp_request *req, struct token *tok,
 			break;
 		}
 
-		if ((res = login(buf, tok)) < 0) {
+		if ((res = login(sql, tok, buf)) < 0) {
 			rep->status = KBP_S_FAIL;
 		} else {
 			if (verbose)
-				printf("%s: session login: %s\n", addr,
-						tok->iban);
+				printf("%s: session login: %u,%u\n", addr,
+						tok->customer_id, tok->card_id);
 			rep->status = KBP_S_OK;
 		}
 		break;
 	case KBP_T_LOGOUT:
 		if (verbose)
-			printf("%s: session logout: %s\n", addr, tok->iban);
+			printf("%s: session logout: %u,%u\n", addr,
+					tok->customer_id, tok->card_id);
 
 		tok->valid = 0;
 		rep->status = KBP_S_TIMEOUT;
@@ -247,7 +269,7 @@ static struct kbp_reply *process(struct kbp_request *req, struct token *tok,
 			break;
 		}
 
-		if ((res = transfer(buf)) < 0)
+		if ((res = transfer(sql, tok, buf)) < 0)
 			rep->status = KBP_S_FAIL;
 		else
 			rep->status = KBP_S_OK;
@@ -260,20 +282,21 @@ static struct kbp_reply *process(struct kbp_request *req, struct token *tok,
 
 	rep->length = (res < 0) ? 0 : res;
 
-	return rep;
+	return 1;
 }
 
 void *session(void *_conn)
 {
 	struct connection *conn = _conn;
 	struct kbp_request req;
-	struct kbp_reply *rep;
+	struct kbp_reply rep;
 	struct token tok;
 	char *buf, addr[INET_ADDRSTRLEN];
 	int res, errcnt = 0;
 	MYSQL *sql = NULL;
 	SSL *ssl = NULL;
 
+	rep.magic = KBP_MAGIC;
 	memset(&tok, 0, sizeof(tok));
 
 	/* Get client IP */
@@ -310,8 +333,6 @@ void *session(void *_conn)
 
 	/* FIXME Do this more dynamically */
 	for (;;) {
-		rep = NULL;
-
 		/* Check if maximum error count hasn't been exceeded. */
 		if (errcnt > KBP_ERROR_MAX) {
 			fprintf(stderr, "%s: maximum error count (%d) has been "
@@ -354,23 +375,23 @@ void *session(void *_conn)
 		}
 
 		/* Process the request */
-		if (!(rep = process(&req, &tok, &buf, addr, sql))) {
+		if (process(sql, &buf, addr, &req, &tok, &rep) < 0) {
 			fprintf(stderr, "%s: error processing request\n", addr);
 			errcnt++;
 			goto next;
 		}
 
 		/* Send the header */
-		if (SSL_write(ssl, rep, sizeof(struct kbp_reply)) <= 0) {
+		if (SSL_write(ssl, &rep, sizeof(struct kbp_reply)) <= 0) {
 			fprintf(stderr, "%s: header write error\n", addr);
 			errcnt++;
 			goto next;
 		}
 
 		/* Finally, send back the data */
-		if (rep->length && SSL_write(ssl, buf, rep->length) <= 0) {
+		if (rep.length && SSL_write(ssl, buf, rep.length) <= 0) {
 			fprintf(stderr, "%s: write error: %d\n", addr,
-					rep->length);
+					rep.length);
 			errcnt++;
 			goto next;
 		}
@@ -381,7 +402,6 @@ void *session(void *_conn)
 
 next:
 		free(buf);
-		free(rep);
 	}
 
 ret:

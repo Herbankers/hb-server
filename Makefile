@@ -10,7 +10,7 @@ PKGLIST		= libssl libcrypto mariadb
 MAKEFLAGS	:= -s
 
 CFLAGS		:= -Wall -Wextra -unused-parameter -Wpedantic -std=c99 -D_XOPEN_SOURCE=700 `pkg-config --cflags $(PKGLIST)` -g -O0 #-s -Os
-LDFLAGS		:= -lpthread `pkg-config --libs $(PKGLIST)`
+LDFLAGS		:= -lpthread -lscrypt `pkg-config --libs $(PKGLIST)`
 
 kech-server-o	= main.o session.o
 

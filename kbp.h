@@ -52,6 +52,8 @@
 #define KBP_IBAN_MAX	34
 /* Maximum length for a PIN (per ISO 9564-1:2011) */
 #define KBP_PIN_MAX	12
+/* Maximum length for a PIN hash */
+#define KBP_HASH_MAX	128
 /* Session timeout in minutes */
 #define KBP_TIMEOUT	15
 
@@ -120,7 +122,8 @@ enum {
 	KBP_T_TRANSACTIONS,
 	/*
 	 * Transfer from iban_in to iban_out, the iban_in must belong to the
-	 * user associated with the active session.
+	 * user associated with the active session. An empty iban_in signifies a
+	 * deposit. Likewise, an empty iban_out signifies a withdrawal.
 	 *
 	 * Needs: active session
 	 * Requests: struct kbp_request_transfer
@@ -160,10 +163,12 @@ struct kbp_request {
 
 /* Login request */
 struct kbp_request_login {
-	/* IBAN */
-	char	iban[KBP_IBAN_MAX + 1];
+	/* Customer ID */
+	uint32_t	customer_id;
+	/* Card ID */
+	uint32_t	card_id;
 	/* PIN */
-	char	pin[KBP_PIN_MAX + 1];
+	char		pin[KBP_PIN_MAX + 1];
 };
 
 /* Transfer request */
