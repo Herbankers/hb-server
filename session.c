@@ -307,6 +307,7 @@ static int transfer(MYSQL *sql, struct token *tok, char **buf)
 static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		struct token *tok, struct kbp_reply *rep)
 {
+	struct kbp_request_transfer t;
 	int res;
 
 	/* Check if session hasn't timed out */
@@ -388,11 +389,18 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 			rep->status = KBP_S_INVALID;
 			break;
 		}
+		memcpy(&t, *buf, req->length);
 
-		if ((res = transfer(sql, tok, buf)) < 0)
+		if ((res = transfer(sql, tok, buf)) < 0) {
 			rep->status = KBP_S_FAIL;
-		else
+		} else {
+			if (verbose)
+				printf("%s: transfer from '%s' to '%s': "
+						"EUR %.2f\n", addr,
+						t.iban_in, t.iban_out,
+						(double) t.amount / 100);
 			rep->status = KBP_S_OK;
+		}
 		break;
 	/* Invalid or unimplemented request */
 	default:
