@@ -5,7 +5,7 @@
 CC		:= gcc
 LD		:= gcc
 
-PKGLIST		= libssl libcrypto mariadb
+PKGLIST		= libssl mariadb
 
 MAKEFLAGS	:= -s
 
