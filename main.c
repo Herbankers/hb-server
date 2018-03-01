@@ -210,7 +210,7 @@ int main(int argc, char **argv)
 	int c;
 
 	/* Parse arguments */
-	while ((c = getopt(argc, argv, "p:c:k:i:P:d:u:a:hv")) == 0) {
+	while ((c = getopt(argc, argv, "p:c:k:i:P:d:u:a:hv")) != -1) {
 		switch (c) {
 		/* Port number */
 		case 'p':
@@ -218,19 +218,19 @@ int main(int argc, char **argv)
 			break;
 		/* Certificate file path */
 		case 'c':
-			if (!(cert = malloc(strlen(optarg))))
+			if (!(cert = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(cert, optarg);
 			break;
 		/* Key file path */
 		case 'k':
-			if (!(key = malloc(strlen(optarg))))
+			if (!(key = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(key, optarg);
 			break;
 		/* MySQL database host */
 		case 'I':
-			if (!(sql_host = malloc(strlen(optarg))))
+			if (!(sql_host = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(sql_host, optarg);
 			break;
@@ -240,19 +240,19 @@ int main(int argc, char **argv)
 			break;
 		/* MySQL database database name */
 		case 'd':
-			if (!(sql_db = malloc(strlen(optarg))))
+			if (!(sql_db = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(sql_db, optarg);
 			break;
 		/* MySQL database username */
 		case 'u':
-			if (!(sql_user = malloc(strlen(optarg))))
+			if (!(sql_user = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(sql_user, optarg);
 			break;
 		/* MySQL database password */
 		case 'a':
-			if (!(sql_pass = malloc(strlen(optarg))))
+			if (!(sql_pass = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(sql_pass, optarg);
 			break;
@@ -286,25 +286,25 @@ int main(int argc, char **argv)
 
 	if (!sql_host) {
 		s = "localhost";
-		sql_host = malloc(strlen(s));
+		sql_host = malloc(strlen(s) + 1);
 		strcpy(sql_host, s);
 	}
 
 	if (!sql_db) {
 		s = "kech";
-		sql_db = malloc(strlen(s));
+		sql_db = malloc(strlen(s) + 1);
 		strcpy(sql_db, s);
 	}
 
 	if (!sql_user) {
 		s = "root";
-		sql_user = malloc(strlen(s));
+		sql_user = malloc(strlen(s) + 1);
 		strcpy(sql_user, s);
 	}
 
 	if (!sql_pass) {
 		s = "";
-		sql_pass = malloc(strlen(s));
+		sql_pass = malloc(strlen(s) + 1);
 		strcpy(sql_pass, s);
 	}
 
