@@ -206,7 +206,8 @@ static void fini(void)
 
 int main(int argc, char **argv)
 {
-	char c, *s;
+	char *s;
+	int c;
 
 	/* Parse arguments */
 	while ((c = getopt(argc, argv, "p:c:k:i:P:d:u:a:hv")) == 0) {
