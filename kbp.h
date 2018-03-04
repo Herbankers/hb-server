@@ -54,6 +54,8 @@
 #define KBP_PIN_MAX	12
 /* Maximum length for a PIN hash */
 #define KBP_HASH_MAX	128
+/* Maximum times PIN entry can be attempted before blocking the card */
+#define KBP_PINTRY_MAX	3
 /* Session timeout in minutes */
 #define KBP_TIMEOUT	15
 
@@ -61,19 +63,19 @@
 /*
  * Account types
  */
-enum {
+typedef enum {
 	/* Checkings account */
 	KBP_A_CHECKING,
 	/* Savings account */
 	KBP_A_SAVINGS
-};
+} kbp_account_t;
 
 
 /*
  * Request types
  */
 
-enum {
+typedef enum {
 	/*
 	 * Request an array of accounts associated with user belonging to the
 	 * active session.
@@ -96,11 +98,15 @@ enum {
 	 * A session shall last KBP_TIMEOUT minutes. Requests made after this
 	 * time will be answered with status flag KBP_S_TIMEOUT. Closing the
 	 * connection (unexpectedly) or sending more than KBP_ERROR_MAX invalid
-	 * requests will also end the session.
+	 * requests will also end the session. KBP_L_DENIED shall be returned on
+	 * an invalid pin entry. Three invalid entries will result in the card
+	 * being blocked after which KBP_L_BLOCKED shall be returned until the
+	 * card is manually unblocked again. KBP_L_GRANTED will be returned if
+	 * a session has successfully been started.
 	 *
 	 * Needs: -
 	 * Requests: struct kbp_request_login
-	 * Returns: -
+	 * Returns: kbp_reply_login
 	 */
 	KBP_T_LOGIN,
 	/*
@@ -130,21 +136,23 @@ enum {
 	 * Returns: -
 	 */
 	KBP_T_TRANSFER
-};
+} kbp_request_t;
 
 
 /*
  * Reply status
  */
 
-/* Session has timed out */
-#define KBP_S_TIMEOUT	-2
-/* Invalid request */
-#define KBP_S_INVALID	-1
-/* Request failed */
-#define KBP_S_FAIL	0
-/* Request succeeded */
-#define KBP_S_OK	1
+typedef enum {
+	/* Session has timed out */
+	KBP_S_TIMEOUT = -2,
+	/* Invalid request */
+	KBP_S_INVALID,
+	/* Request failed */
+	KBP_S_FAIL,
+	/* Request succeeded */
+	KBP_S_OK
+} kbp_reply_s;
 
 
 /*
@@ -156,7 +164,7 @@ struct kbp_request {
 	/* Magic number (KBP_MAGIC) */
 	uint32_t	magic;
 	/* Request type */
-	uint8_t		type;
+	kbp_request_t	type;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
 	int32_t		length;
 };
@@ -191,7 +199,7 @@ struct kbp_reply {
 	/* Magic number (KBP_MAGIC) */
 	uint32_t	magic;
 	/* Reply status */
-	int8_t		status;
+	kbp_reply_s	status;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
 	int32_t		length;
 };
@@ -201,10 +209,20 @@ struct kbp_reply_account {
 	/* IBAN */
 	char		iban[KBP_IBAN_MAX + 1];
 	/* Account type */
-	uint8_t		type;
+	kbp_account_t	type;
 	/* Balance in EUR * 100 (2 decimal places) */
 	int64_t		balance;
 };
+
+/* Login reply */
+typedef enum {
+	/* Successful login */
+	KBP_L_GRANTED,
+	/* Invalid PIN */
+	KBP_L_DENIED,
+	/* Blocked card */
+	KBP_L_BLOCKED
+} kbp_reply_login;
 
 /* Transaction reply */
 struct kbp_reply_transaction {

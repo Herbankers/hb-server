@@ -120,19 +120,22 @@ static int pin_update(char **buf)
 	return -1;
 }
 
+/* This entire function is a fucking mess */
 static int login(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_request_login l;
 	char *_q, *q = NULL;
 	MYSQL_RES *res = NULL;
 	MYSQL_ROW row;
+	int _res = KBP_L_GRANTED;
+	char *r;
 
 	memcpy(&l, *buf, sizeof(l));
 	free(*buf);
 	*buf = NULL;
 
 	/* Prepare the query */
-	_q = "SELECT `pin` FROM `cards` WHERE `user_id` = %u AND "
+	_q = "SELECT `pin`, `blocked` FROM `cards` WHERE `user_id` = %u AND "
 			"`card_id` = %u";
 	if (!(q = malloc(snprintf(NULL, 0, _q, l.user_id, l.card_id) + 1)))
 		goto err;
@@ -149,22 +152,41 @@ static int login(MYSQL *sql, struct token *tok, char **buf)
 		goto err;
 
 	/* Check if the entered password is correct */
-	if (libscrypt_check(row[0], l.pin) <= 0)
-		return -1;
+	if (libscrypt_check(row[0], l.pin) <= 0) {
+		_res = KBP_L_DENIED;
+		goto ret;
+	}
+
+	/* Check if card is blocked */
+	if (strtol(row[1], NULL, 10)) {
+		_res = KBP_L_BLOCKED;
+		goto ret;
+	}
+
+	/* TODO Set blocked flag */
 
 	tok->valid = 1;
 	tok->user_id = l.user_id;
 	tok->card_id = l.card_id;
 	tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
 
-	free(q);
-	mysql_free_result(res);
-	return 0;
+	goto ret;
 
 err:
+	_res = -1;
+
+ret:
 	free(q);
 	mysql_free_result(res);
-	return -1;
+
+	if (_res >= 0) {
+		if (!(r = malloc(sizeof(kbp_reply_login))))
+			return -1;
+		*buf = (char *) r;
+		*r = _res;
+	}
+
+	return 0;
 }
 
 static int transactions_get(char **buf)
@@ -358,10 +380,14 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		if ((res = login(sql, tok, buf)) < 0) {
 			rep->status = KBP_S_FAIL;
 		} else {
-			if (verbose)
+			if (verbose && (kbp_reply_login)
+					**buf == KBP_L_GRANTED)
 				printf("%s: session login: %u,%u\n", addr,
 						tok->user_id, tok->card_id);
+
 			rep->status = KBP_S_OK;
+			rep->length = sizeof(kbp_reply_login);
+			return 1;
 		}
 		break;
 	case KBP_T_LOGOUT:
@@ -399,6 +425,7 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 						"EUR %.2f\n", addr,
 						t.iban_in, t.iban_out,
 						(double) t.amount / 100);
+
 			rep->status = KBP_S_OK;
 		}
 		break;
@@ -533,8 +560,8 @@ void *session(void *_conn)
 		}
 
 		if (verbose)
-			printf("%s: request %u has been processed\n", addr,
-					req.type);
+			printf("%s: request %u has been processed: %d\n", addr,
+					req.type, rep.status);
 
 next:
 		free(buf);
