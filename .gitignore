@@ -1,5 +1,9 @@
+*.crt
+*.csr
+*.key
 *.o
 *.pem
+*.srl
 *.swp
 
 kech-server

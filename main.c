@@ -38,10 +38,6 @@
 
 #include <mysql/mysql.h>
 
-/* #include <openssl/rsa.h> */
-/* #include <openssl/crypto.h> */
-/* #include <openssl/x509.h> */
-/* #include <openssl/pem.h> */
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
@@ -49,7 +45,7 @@
 #include "kbp.h"
 
 static uint16_t port = KBP_PORT;
-static char *cert, *key;
+static char *ca, *cert, *key;
 bool verbose;
 
 SSL_CTX *ctx;
@@ -71,6 +67,18 @@ static int init(void)
 		goto err;
 	if (!(ctx = SSL_CTX_new(met)))
 		goto err;
+
+	/* Load CA */
+	if (access(ca, F_OK) < 0) {
+		fprintf(stderr, "%s: %s\n", ca, strerror(errno));
+		goto err;
+	}
+	if (verbose)
+		printf("using '%s' CA\n", ca);
+	if (!SSL_CTX_load_verify_locations(ctx, ca, NULL)) {
+		fprintf(stderr, "unable to load CA: %s\n", ca);
+		goto err;
+	}
 
 	/* Load certificate and private key files */
 	if (access(cert, F_OK) < 0) {
@@ -94,8 +102,9 @@ static int init(void)
 	if (!SSL_CTX_check_private_key(ctx))
 		goto err;
 
-	/* TODO Require peer certificate validation */
-	/* SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback); */
+	/* Require client verification */
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+	SSL_CTX_set_verify_depth(ctx, 1);
 
 	if (verbose)
 		printf("OpenSSL has been successfully initialized\n");
@@ -177,6 +186,7 @@ static void usage(char *prog)
 {
 	printf("Usage: %s [OPTION...]\n\n%s", prog,
 			"  -p PORT NUMBER       port number to bind socket to\n"
+			"  -C FILE              CA file to use\n"
 			"  -c FILE              certificate file to use\n"
 			"  -k FILE              private key file to use\n"
 			"  -i IP ADDRESS        MySQL database host\n"
@@ -210,11 +220,17 @@ int main(int argc, char **argv)
 	int c;
 
 	/* Parse arguments */
-	while ((c = getopt(argc, argv, "p:c:k:i:P:d:u:a:hv")) != -1) {
+	while ((c = getopt(argc, argv, "p:C:c:k:i:P:d:u:a:hv")) != -1) {
 		switch (c) {
 		/* Port number */
 		case 'p':
 			port = strtol(optarg, NULL, 10);
+			break;
+		/* CA file path */
+		case 'C':
+			if (!(ca = malloc(strlen(optarg) + 1)))
+				goto err;
+			strcpy(ca, optarg);
 			break;
 		/* Certificate file path */
 		case 'c':
@@ -259,8 +275,13 @@ int main(int argc, char **argv)
 		/* Usage */
 		case 'h':
 			usage(argv[0]);
+
 			free(cert);
 			free(key);
+			free(sql_host);
+			free(sql_db);
+			free(sql_user);
+			free(sql_pass);
 
 			return 0;
 		/* Verbose */
@@ -274,7 +295,11 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (!cert) {
+	if (!ca) {
+		fprintf(stderr, "please specify a CA file\n");
+		usage(argv[0]);
+		goto err;
+	} else if (!cert) {
 		fprintf(stderr, "please specify a certificate file\n");
 		usage(argv[0]);
 		goto err;

@@ -445,7 +445,15 @@ void *session(void *_conn)
 		goto ret;
 	}
 
-	/* TODO Verify certificate */
+	/* Get and verify the client certificate */
+	if (!SSL_get_peer_certificate(ssl)) {
+		fprintf(stderr, "client failed to present certificate\n");
+		goto ret;
+	}
+	if (SSL_get_verify_result(ssl) != X509_V_OK) {
+		fprintf(stderr, "certificate verfication failed\n");
+		goto ret;
+	}
 
 	/* Connect to the database */
 	if (!(sql = mysql_init(NULL))) {
