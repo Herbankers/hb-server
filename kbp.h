@@ -163,8 +163,8 @@ struct kbp_request {
 
 /* Login request */
 struct kbp_request_login {
-	/* Customer ID */
-	uint32_t	customer_id;
+	/* User ID */
+	uint32_t	user_id;
 	/* Card ID */
 	uint32_t	card_id;
 	/* PIN */

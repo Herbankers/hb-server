@@ -220,7 +220,7 @@ int main(int argc, char **argv)
 	int c;
 
 	/* Parse arguments */
-	while ((c = getopt(argc, argv, "p:C:c:k:i:P:d:u:a:hv")) != -1) {
+	while ((c = getopt(argc, argv, "p:C:c:k:I:P:d:u:a:hv")) != -1) {
 		switch (c) {
 		/* Port number */
 		case 'p':

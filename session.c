@@ -45,7 +45,7 @@
 
 struct token {
 	bool		valid;
-	uint32_t	customer_id;
+	uint32_t	user_id;
 	uint32_t	card_id;
 	time_t		expiry_time;
 };
@@ -73,10 +73,10 @@ static int accounts_get(MYSQL *sql, struct token *tok, char **buf)
 
 	/* Prepare the query */
 	_q = "SELECT `iban`, `type`, `balance` FROM `accounts` "
-		"WHERE `customer_id` = %u ORDER BY `type`";
-	if (!(q = malloc(snprintf(NULL, 0, _q, tok->customer_id) + 1)))
+		"WHERE `user_id` = %u ORDER BY `type`";
+	if (!(q = malloc(snprintf(NULL, 0, _q, tok->user_id) + 1)))
 		goto err;
-	sprintf(q, _q, tok->customer_id);
+	sprintf(q, _q, tok->user_id);
 
 	/* Run it */
 	if (mysql_query(sql, q))
@@ -132,11 +132,11 @@ static int login(MYSQL *sql, struct token *tok, char **buf)
 	*buf = NULL;
 
 	/* Prepare the query */
-	_q = "SELECT `pin` FROM `cards` WHERE `customer_id` = %u AND "
+	_q = "SELECT `pin` FROM `cards` WHERE `user_id` = %u AND "
 			"`card_id` = %u";
-	if (!(q = malloc(snprintf(NULL, 0, _q, l.customer_id, l.card_id) + 1)))
+	if (!(q = malloc(snprintf(NULL, 0, _q, l.user_id, l.card_id) + 1)))
 		goto err;
-	sprintf(q, _q, l.customer_id, l.card_id);
+	sprintf(q, _q, l.user_id, l.card_id);
 
 	/* Run it */
 	if (mysql_query(sql, q))
@@ -153,7 +153,7 @@ static int login(MYSQL *sql, struct token *tok, char **buf)
 		return -1;
 
 	tok->valid = 1;
-	tok->customer_id = l.customer_id;
+	tok->user_id = l.user_id;
 	tok->card_id = l.card_id;
 	tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
 
@@ -187,11 +187,11 @@ static int ownsaccount(MYSQL *sql, struct token *tok, const char *iban)
 	int n;
 
 	/* Prepare the query */
-	_q = "SELECT 1 FROM `accounts` WHERE `customer_id` = %u AND "
+	_q = "SELECT 1 FROM `accounts` WHERE `user_id` = %u AND "
 			"`iban` = '%s'";
-	if (!(q = malloc(snprintf(NULL, 0, _q, tok->customer_id, iban) + 1)))
+	if (!(q = malloc(snprintf(NULL, 0, _q, tok->user_id, iban) + 1)))
 		goto err;
-	sprintf(q, _q, tok->customer_id, iban);
+	sprintf(q, _q, tok->user_id, iban);
 
 	/* Run it */
 	if (mysql_query(sql, q))
@@ -315,7 +315,7 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		if (time(NULL) > tok->expiry_time) {
 			if (verbose)
 				printf("%s: session timeout: %u,%u\n", addr,
-						tok->customer_id, tok->card_id);
+						tok->user_id, tok->card_id);
 
 			tok->valid = 0;
 			rep->status = KBP_S_TIMEOUT;
@@ -360,14 +360,14 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		} else {
 			if (verbose)
 				printf("%s: session login: %u,%u\n", addr,
-						tok->customer_id, tok->card_id);
+						tok->user_id, tok->card_id);
 			rep->status = KBP_S_OK;
 		}
 		break;
 	case KBP_T_LOGOUT:
 		if (verbose)
 			printf("%s: session logout: %u,%u\n", addr,
-					tok->customer_id, tok->card_id);
+					tok->user_id, tok->card_id);
 
 		tok->valid = 0;
 		rep->status = KBP_S_TIMEOUT;

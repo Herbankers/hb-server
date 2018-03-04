@@ -1,5 +1,5 @@
 digraph {
-	A [label="Customers",shape=box];
+	A [label="Users",shape=box];
 	a1 [label=<<u>ID</u>>];
 	a2 [label="First name"];
 	a3 [label="Last name"];
@@ -30,7 +30,7 @@ digraph {
 	subgraph attributes {
 		edge [dir=none];
 
-		/* Customers */
+		/* Users */
 		A -> a1;
 		A -> a2;
 		A -> a3;
@@ -75,7 +75,7 @@ digraph {
 
 		n1 [label="Money is stored in EUR * 100.\nEUR 12,59 would for example\nbe stored as 1259."];
 
-		b2 -> "The Card ID is local to\nevery customer as\nopposed to the primary key.";
+		b2 -> "The Card ID is local to\nevery user as\nopposed to the primary key.";
 		b3 -> "The PIN will be hashed\nusing scrypt.";
 		b4 -> "A boolean value to indicate\nwhether the card\nis blocked.";
 
