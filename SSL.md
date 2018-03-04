@@ -26,7 +26,7 @@ openssl req -new -key server.key -out server.csr
 
 Finally, sign the new certificate:
 ```
-openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out server.crt -sha256
+openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -out server.crt -sha256
 ```
 
 The server can now be started with the following command line arguments:
@@ -65,7 +65,7 @@ openssl req -new -key client.key -out client.csr
 
 Finally, sign the new certificate with the CA on the server:
 ```
-openssl x509 -req -in client.csr -CA clientca.pem -CAkey clientca.key -CAcreateserial -out client.crt -sha256
+openssl x509 -req -in client.csr -CA clientca.pem -CAkey clientca.key -out client.crt -sha256
 ```
 
 The ATM can now be started with the following command line arguments:
