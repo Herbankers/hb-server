@@ -60,6 +60,34 @@ static bool isiban(const char *str)
 	return 1;
 }
 
+static int attempts_update(MYSQL *sql, uint32_t user_id, uint32_t card_id,
+		bool success)
+{
+	char *_q, *q = NULL;
+
+	/* Prepare the query to update/reset the number of attempts made */
+	if (success)
+		_q = "UPDATE `cards` SET `attempts` = 0 WHERE "
+				"`user_id` = %u AND `card_id` = %u";
+	else
+		_q = "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE "
+				"`user_id` = %u AND `card_id` = %u";
+	if (!(q = malloc(snprintf(NULL, 0, _q, user_id, card_id) + 1)))
+		goto err;
+	sprintf(q, _q, user_id, card_id);
+
+	/* Run it */
+	if (mysql_query(sql, q))
+		goto err;
+
+	free(q);
+	return 1;
+
+err:
+	free(q);
+	return 0;
+}
+
 static int accounts_get(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_reply_account *a;
@@ -135,7 +163,7 @@ static int login(MYSQL *sql, struct token *tok, char **buf)
 	*buf = NULL;
 
 	/* Prepare the query */
-	_q = "SELECT `pin`, `blocked` FROM `cards` WHERE `user_id` = %u AND "
+	_q = "SELECT `pin`, `attempts` FROM `cards` WHERE `user_id` = %u AND "
 			"`card_id` = %u";
 	if (!(q = malloc(snprintf(NULL, 0, _q, l.user_id, l.card_id) + 1)))
 		goto err;
@@ -151,19 +179,23 @@ static int login(MYSQL *sql, struct token *tok, char **buf)
 	if (!(row = mysql_fetch_row(res)))
 		goto err;
 
-	/* Check if the entered password is correct */
-	if (libscrypt_check(row[0], l.pin) <= 0) {
-		_res = KBP_L_DENIED;
-		goto ret;
-	}
-
 	/* Check if card is blocked */
-	if (strtol(row[1], NULL, 10)) {
+	if (strtol(row[1], NULL, 10) >= KBP_PINTRY_MAX) {
 		_res = KBP_L_BLOCKED;
 		goto ret;
 	}
 
+	/* Check if the entered password is correct */
+	if (libscrypt_check(row[0], l.pin) <= 0) {
+		if (!attempts_update(sql, l.user_id, l.card_id, 0))
+			goto err;
+		_res = KBP_L_DENIED;
+		goto ret;
+	}
+
 	/* TODO Set blocked flag */
+	if (!attempts_update(sql, l.user_id, l.card_id, 1))
+		goto err;
 
 	tok->valid = 1;
 	tok->user_id = l.user_id;
@@ -186,7 +218,7 @@ ret:
 		*r = _res;
 	}
 
-	return 0;
+	return _res;
 }
 
 static int transactions_get(char **buf)

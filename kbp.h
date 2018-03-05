@@ -63,6 +63,7 @@
 /*
  * Account types
  */
+
 typedef enum {
 	/* Checkings account */
 	KBP_A_CHECKING,
@@ -98,11 +99,11 @@ typedef enum {
 	 * A session shall last KBP_TIMEOUT minutes. Requests made after this
 	 * time will be answered with status flag KBP_S_TIMEOUT. Closing the
 	 * connection (unexpectedly) or sending more than KBP_ERROR_MAX invalid
-	 * requests will also end the session. KBP_L_DENIED shall be returned on
-	 * an invalid pin entry. Three invalid entries will result in the card
-	 * being blocked after which KBP_L_BLOCKED shall be returned until the
-	 * card is manually unblocked again. KBP_L_GRANTED will be returned if
-	 * a session has successfully been started.
+	 * requests will also end the session. KBP_L_DENIED shall be returned
+	 * on an invalid pin entry. KBP_PINTRY_MAX invalid entries will result
+	 * in the card being blocked after which KBP_L_BLOCKED shall be
+	 * returned until the card is manually unblocked again. KBP_L_GRANTED
+	 * will be returned if a session has successfully been started.
 	 *
 	 * Needs: -
 	 * Requests: struct kbp_request_login
