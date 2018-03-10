@@ -2,6 +2,7 @@
 *.csr
 *.key
 *.o
+*.pdf
 *.pem
 *.swp
 
