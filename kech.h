@@ -35,10 +35,11 @@ struct connection {
 	struct sockaddr_in	addr;
 };
 
-extern bool verbose;
 extern SSL_CTX *ctx;
 extern char *sql_host, *sql_db, *sql_user, *sql_pass;
 extern uint16_t sql_port;
+
+void lprintf(const char *msg, ...);
 
 void *session(void *_conn);
 

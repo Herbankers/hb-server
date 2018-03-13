@@ -1,6 +1,7 @@
 *.crt
 *.csr
 *.key
+*.log
 *.o
 *.pdf
 *.pem

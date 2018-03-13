@@ -46,20 +46,58 @@
 
 static uint16_t port = KBP_PORT;
 static char *ca, *cert, *key;
-bool verbose;
+
+static char *log_path;
+static pthread_mutex_t log_lock = PTHREAD_MUTEX_INITIALIZER;
+static bool verbose;
 
 SSL_CTX *ctx;
 
 char *sql_host, *sql_db, *sql_user, *sql_pass;
 uint16_t sql_port;
 
+/* Logging function */
+void lprintf(const char *msg, ...)
+{
+	FILE *file = NULL;
+	time_t t;
+	struct tm *tm;
+	va_list args;
+
+	pthread_mutex_lock(&log_lock);
+
+	if ((file = fopen(log_path, "a"))) {
+		t = time(NULL);
+		tm = localtime(&t);
+
+		va_start(args, msg);
+		fprintf(file, "[%04d-%02d-%02d %02d:%02d:%02d] ",
+				1900 + tm->tm_year, tm->tm_mon, tm->tm_mday,
+				tm->tm_hour, tm->tm_min, tm->tm_sec);
+		vfprintf(file, msg, args);
+		va_end(args);
+
+		fclose(file);
+	}
+
+	if (verbose) {
+		va_start(args, msg);
+		vprintf(msg, args);
+		va_end(args);
+	}
+
+	pthread_mutex_unlock(&log_lock);
+}
+
 static int init(void)
 {
 	const SSL_METHOD *met;
 
+	/* Intialize MySQL */
+	mysql_library_init(0, 0, NULL);
+
 	/* Initialize OpenSSL */
-	if (verbose)
-		printf("initializing OpenSSL...\n");
+	lprintf("initializing OpenSSL...\n");
 	SSL_library_init();
 	SSL_load_error_strings();
 
@@ -73,8 +111,7 @@ static int init(void)
 		fprintf(stderr, "%s: %s\n", ca, strerror(errno));
 		goto err;
 	}
-	if (verbose)
-		printf("using '%s' CA\n", ca);
+	lprintf("using '%s' CA\n", ca);
 	if (!SSL_CTX_load_verify_locations(ctx, ca, NULL)) {
 		fprintf(stderr, "unable to load CA: %s\n", ca);
 		goto err;
@@ -85,8 +122,7 @@ static int init(void)
 		fprintf(stderr, "%s: %s\n", cert, strerror(errno));
 		goto err;
 	}
-	if (verbose)
-		printf("using '%s' certificate\n", cert);
+	lprintf("using '%s' certificate\n", cert);
 	if (SSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) != 1)
 		goto err;
 
@@ -94,8 +130,7 @@ static int init(void)
 		fprintf(stderr, "%s: %s\n", key, strerror(errno));
 		goto err;
 	}
-	if (verbose)
-		printf("using '%s' private key\n", key);
+	lprintf("using '%s' private key\n", key);
 	if (SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) != 1)
 		goto err;
 
@@ -106,8 +141,7 @@ static int init(void)
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 	SSL_CTX_set_verify_depth(ctx, 1);
 
-	if (verbose)
-		printf("OpenSSL has been successfully initialized\n");
+	lprintf("OpenSSL has been successfully initialized\n");
 
 	return 0;
 
@@ -143,8 +177,7 @@ static int run(void)
 	server.sin_addr.s_addr = INADDR_ANY;
 	server.sin_port = htons(port);
 
-	if (verbose)
-		printf("binding socket...\n");
+	lprintf("binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
 		fprintf(stderr, "unable to bind socket: %s\n", strerror(errno));
 		return -1;
@@ -194,6 +227,7 @@ static void usage(char *prog)
 			"  -d DB                MySQL database name\n"
 			"  -u USER              MySQL database username\n"
 			"  -a PASSWORD          MySQL database password\n"
+			"  -l FILE              log file to use\n"
 			"  -h                   show this help message\n"
 			"  -v                   show verbose status messages\n"
 			);
@@ -220,7 +254,7 @@ int main(int argc, char **argv)
 	int c;
 
 	/* Parse arguments */
-	while ((c = getopt(argc, argv, "p:C:c:k:I:P:d:u:a:hv")) != -1) {
+	while ((c = getopt(argc, argv, "p:C:c:k:I:P:d:u:a:l:hv")) != -1) {
 		switch (c) {
 		/* Port number */
 		case 'p':
@@ -272,6 +306,12 @@ int main(int argc, char **argv)
 				goto err;
 			strcpy(sql_pass, optarg);
 			break;
+		/* Log file path */
+		case 'l':
+			if (!(log_path = malloc(strlen(optarg) + 1)))
+				goto err;
+			strcpy(log_path, optarg);
+			break;
 		/* Usage */
 		case 'h':
 			usage(argv[0]);
@@ -309,6 +349,7 @@ int main(int argc, char **argv)
 		goto err;
 	}
 
+	/* Set defaults in case the user hasn't specified these */
 	if (!sql_host) {
 		s = "localhost";
 		sql_host = malloc(strlen(s) + 1);
@@ -333,16 +374,19 @@ int main(int argc, char **argv)
 		strcpy(sql_pass, s);
 	}
 
-	/* TODO IPv6 */
-	printf("welcome to the Kech Bank server!\n");
+	if (!log_path) {
+		s = "kech.log";
+		log_path = malloc(strlen(s) + 1);
+		strcpy(log_path, s);
+	}
 
-	if (verbose)
-		printf("the server will be hosted on localhost:%u\n", port);
+	/* TODO IPv6? */
+	lprintf("welcome to the Kech Bank server!\n");
+
+	lprintf("the server will be hosted on localhost:%u\n", port);
 
 	if (init() < 0)
 		goto err;
-
-	mysql_library_init(0, 0, NULL);
 
 	if (run() < 0)
 		goto err;

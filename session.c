@@ -390,9 +390,8 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 	/* Check if session hasn't timed out */
 	if (tok->valid) {
 		if (time(NULL) > tok->expiry_time) {
-			if (verbose)
-				printf("%s: session timeout: %u,%u\n", addr,
-						tok->user_id, tok->card_id);
+			lprintf("%s: session timeout: %u,%u\n", addr,
+					tok->user_id, tok->card_id);
 
 			tok->valid = 0;
 			rep->status = KBP_S_TIMEOUT;
@@ -435,9 +434,8 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		if ((res = login(sql, tok, buf)) < 0) {
 			rep->status = KBP_S_FAIL;
 		} else {
-			if (verbose && (kbp_reply_login)
-					**buf == KBP_L_GRANTED)
-				printf("%s: session login: %u,%u\n", addr,
+			if ((kbp_reply_login) **buf == KBP_L_GRANTED)
+				lprintf("%s: session login: %u,%u\n", addr,
 						tok->user_id, tok->card_id);
 
 			rep->status = KBP_S_OK;
@@ -446,9 +444,8 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		}
 		break;
 	case KBP_T_LOGOUT:
-		if (verbose)
-			printf("%s: session logout: %u,%u\n", addr,
-					tok->user_id, tok->card_id);
+		lprintf("%s: session logout: %u,%u\n", addr, tok->user_id,
+				tok->card_id);
 
 		tok->valid = 0;
 		rep->status = KBP_S_TIMEOUT;
@@ -475,11 +472,9 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		if ((res = transfer(sql, tok, buf)) < 0) {
 			rep->status = KBP_S_FAIL;
 		} else {
-			if (verbose)
-				printf("%s: transfer from '%s' to '%s': "
-						"EUR %.2f\n", addr,
-						t.iban_in, t.iban_out,
-						(double) t.amount / 100);
+			lprintf("%s: transfer from '%s' to '%s': EUR %.2f\n",
+					addr, t.iban_in, t.iban_out,
+					(double) t.amount / 100);
 
 			rep->status = KBP_S_OK;
 		}
@@ -573,8 +568,7 @@ void *session(void *_conn)
 			continue;
 		}
 
-		if (verbose)
-			printf("%s: new request %u\n", addr, req.type);
+		lprintf("%s: new request %u\n", addr, req.type);
 
 		/* Read request data if available */
 		if (req.length) {
@@ -614,9 +608,8 @@ void *session(void *_conn)
 			goto next;
 		}
 
-		if (verbose)
-			printf("%s: request %u has been processed: %d\n", addr,
-					req.type, rep.status);
+		lprintf("%s: request %u has been processed: %d\n", addr,
+				req.type, rep.status);
 
 next:
 		free(buf);
