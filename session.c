@@ -135,71 +135,62 @@ err:
 	return -1;
 }
 
-static int pin_update(char **buf)
+static int pin_update(MYSQL *sql, struct token *tok, char **buf)
 {
 	char pin[KBP_PIN_MAX + 1];
+	char mcf[SCRYPT_MCF_LEN + 1];
+	char *_q, *q = NULL;
 
-	memcpy(&pin, *buf, KBP_PIN_MAX + 1);
+	strncpy(pin, *buf, KBP_PIN_MAX + 1);
 	free(*buf);
 	*buf = NULL;
 
-	/* Prepare the query */
-	_q = "SELECT `iban`, `type`, `balance` FROM `accounts` "
-		"WHERE `user_id` = %u ORDER BY `type`";
-	if (!(q = malloc(snprintf(NULL, 0, _q, tok->user_id) + 1)))
+	if (strlen(pin) < KBP_PIN_MIN)
 		goto err;
-	sprintf(q, _q, tok->user_id);
+
+	if (!libscrypt_hash(mcf, pin, SCRYPT_N, SCRYPT_r, SCRYPT_p))
+		goto err;
+
+	/* Prepare the query */
+	_q = "UPDATE `cards` SET `pin` = '%s' WHERE "
+			"`user_id` = %u AND `card_id` = %u";
+	if (!(q = malloc(snprintf(NULL, 0, _q, mcf,
+			tok->user_id, tok->card_id) + 1)))
+		goto err;
+	sprintf(q, _q, mcf, tok->user_id, tok->card_id);
 
 	/* Run it */
 	if (mysql_query(sql, q))
 		goto err;
-	if (!(res = mysql_store_result(sql)))
-		goto err;
-
-	/* Allocate and fill the array */
-	n = mysql_num_rows(res);
-	if (!(a = malloc(n * sizeof(struct kbp_reply_account))))
-		goto err;
-	*buf = (char *) a;
-
-	while ((row = mysql_fetch_row(res))) {
-		strncpy((*a).iban, row[0], KBP_IBAN_MAX);
-		(*a).type = strtol(row[1], NULL, 10);
-		(*a).balance = strtoll(row[2], NULL, 10);
-		a++;
-	}
 
 	free(q);
-	mysql_free_result(res);
-	/*
-	 * TODO
-	 * - 
-	 */
+	return 0;
 
+err:
+	free(q);
 	return -1;
 }
 
 /* This entire function is a fucking mess */
 static int login(MYSQL *sql, struct token *tok, char **buf)
 {
-	char pin[KBP_PIN_MAX + 1];
+	struct kbp_request_login l;
 	char *_q, *q = NULL;
 	MYSQL_RES *res = NULL;
 	MYSQL_ROW row;
 	int _res = KBP_L_GRANTED;
 	char *r;
 
-	memcpy(&pin, *buf, sizeof(KBP_PIN_MAX + 1));
+	memcpy(&l, *buf, sizeof(l));
 	free(*buf);
 	*buf = NULL;
 
 	/* Prepare the query */
-		_q = "UPDATE `` SET `pin` = '%s' WHERE "
-				"`user_id` = %u AND `card_id` = %u";
-	if (!(q = malloc(snprintf(NULL, 0, _q,
-			tok->user_id, tok->card_id) + 1)))
+	_q = "SELECT `pin`, `attempts` FROM `cards` WHERE `user_id` = %u AND "
+			"`card_id` = %u";
+	if (!(q = malloc(snprintf(NULL, 0, _q, l.user_id, l.card_id) + 1)))
 		goto err;
-	sprintf(q, _q, tok->user_id, tok->card_id);
+	sprintf(q, _q, l.user_id, l.card_id);
 
 	/* Run it */
 	if (mysql_query(sql, q))
@@ -430,7 +421,7 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 			break;
 		}
 
-		if ((res = pin_update(buf)) < 0)
+		if ((res = pin_update(sql, tok, buf)) < 0)
 			rep->status = KBP_S_FAIL;
 		else
 			rep->status = KBP_S_OK;

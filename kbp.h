@@ -50,10 +50,10 @@
 #define KBP_LENGTH_MAX	4096
 /* Maximum length for an IBAN (per ISO 13616-1:2007) */
 #define KBP_IBAN_MAX	34
+/* Minimum length for a PIN (per ISO 9564-1:2011) */
+#define KBP_PIN_MIN	4
 /* Maximum length for a PIN (per ISO 9564-1:2011) */
 #define KBP_PIN_MAX	12
-/* Maximum length for a PIN hash */
-#define KBP_HASH_MAX	128
 /* Maximum times PIN entry can be attempted before blocking the card */
 #define KBP_PINTRY_MAX	3
 /* Session timeout in minutes */
