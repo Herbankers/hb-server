@@ -374,7 +374,7 @@ static int transfer(MYSQL *sql, struct token *tok, char **buf)
 		if (modify(sql, t.iban_in, -t.amount) < 0)
 			return -1;
 	if (*t.iban_out)
-		if (modify(sql, t.iban_in, t.amount) < 0)
+		if (modify(sql, t.iban_out, t.amount) < 0)
 			if (*t.iban_in && modify(sql, t.iban_in, t.amount) < 0)
 				return -1;
 
