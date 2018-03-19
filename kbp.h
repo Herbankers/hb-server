@@ -1,6 +1,6 @@
 /*
  *
- * Kech Bank Protocol
+ * Kech Bank Protocol vers. 1
  * kbp.h
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -36,6 +36,8 @@
 
 /* Kech server MAGIC number ("KECH") */
 #define KBP_MAGIC	0x4B454348
+/* Kech Bank Protocl version */
+#define KBP_VERSION	1
 /* Kech server default port */
 #define KBP_PORT	42069
 
@@ -162,7 +164,7 @@ typedef enum {
 
 /* Request header */
 struct kbp_request {
-	/* Magic number (KBP_MAGIC) */
+	/* Magic number (KBP_MAGIC ^ KBP_VERSION) */
 	uint32_t	magic;
 	/* Request type */
 	kbp_request_t	type;
@@ -197,7 +199,7 @@ struct kbp_request_transfer {
 
 /* Reply header */
 struct kbp_reply {
-	/* Magic number (KBP_MAGIC) */
+	/* Magic number (KBP_MAGIC ^ KBP_VERSION) */
 	uint32_t	magic;
 	/* Reply status */
 	kbp_reply_s	status;

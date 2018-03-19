@@ -501,7 +501,7 @@ void *session(void *_conn)
 	MYSQL *sql = NULL;
 	SSL *ssl = NULL;
 
-	rep.magic = KBP_MAGIC;
+	rep.magic = KBP_MAGIC ^ KBP_VERSION;
 	memset(&tok, 0, sizeof(tok));
 
 	/* Get client IP */
@@ -512,35 +512,35 @@ void *session(void *_conn)
 
 	/* Setup an SSL/TLS connection */
 	if (!(ssl = SSL_new(ctx))) {
-		fprintf(stderr, "unable to allocate SSL structure\n");
+		lprintf("unable to allocate SSL structure\n");
 		goto ret;
 	}
 	SSL_set_fd(ssl, conn->sock);
 
 	if (SSL_accept(ssl) <= 0) {
-		fprintf(stderr, "%s: SSL error\n", addr);
+		lprintf("%s: SSL error\n", addr);
 		goto ret;
 	}
 
 	/* Get and verify the client certificate */
 	if (!SSL_get_peer_certificate(ssl)) {
-		fprintf(stderr, "client failed to present certificate\n");
+		lprintf("client failed to present certificate\n");
 		goto ret;
 	}
 	if (SSL_get_verify_result(ssl) != X509_V_OK) {
-		fprintf(stderr, "certificate verfication failed\n");
+		lprintf("certificate verfication failed\n");
 		goto ret;
 	}
 
 	/* Connect to the database */
 	if (!(sql = mysql_init(NULL))) {
-		fprintf(stderr, "mysql internal error\n");
+		lprintf("mysql internal error\n");
 		goto ret;
 	}
 
 	if (!mysql_real_connect(sql, sql_host, sql_user, sql_pass, sql_db,
 			sql_port, NULL, 0)) {
-		fprintf(stderr, "database connection error\n");
+		lprintf("database connection error\n");
 		goto ret;
 	}
 
@@ -548,7 +548,7 @@ void *session(void *_conn)
 	for (;;) {
 		/* Check if maximum error count hasn't been exceeded. */
 		if (errcnt > KBP_ERROR_MAX) {
-			fprintf(stderr, "%s: maximum error count (%d) has been "
+			lprintf("%s: maximum error count (%d) has been "
 					"exceeded\n", addr, KBP_ERROR_MAX);
 			break;
 		}
@@ -557,13 +557,14 @@ void *session(void *_conn)
 		if ((res = SSL_read(ssl, &req, sizeof(req))) <= 0) {
 			if (SSL_get_error(ssl, res) == SSL_ERROR_ZERO_RETURN)
 				break;
-			fprintf(stderr, "%s: header read error\n", addr);
+			lprintf("%s: header read error\n", addr);
 			errcnt++;
 			continue;
 		}
-		if (req.magic != KBP_MAGIC || req.length > KBP_LENGTH_MAX) {
-			fprintf(stderr, "%#x\n", req.type);
-			fprintf(stderr, "%s: invalid request\n", addr);
+		if (req.magic != (KBP_MAGIC ^ KBP_VERSION) ||
+				req.length > KBP_LENGTH_MAX) {
+			lprintf("%s: invalid request/KBP version mismatch %u\n",
+					addr, req.magic ^ KBP_MAGIC);
 			errcnt++;
 			continue;
 		}
@@ -573,12 +574,12 @@ void *session(void *_conn)
 		/* Read request data if available */
 		if (req.length) {
 			if (!(buf = malloc(req.length))) {
-				fprintf(stderr, "out of memory\n");
+				lprintf("out of memory\n");
 				break;
 			}
 
 			if (SSL_read(ssl, buf, req.length) <= 0) {
-				fprintf(stderr, "%s: read error\n", addr);
+				lprintf("%s: read error\n", addr);
 				errcnt++;
 				goto next;
 			}
@@ -588,22 +589,21 @@ void *session(void *_conn)
 
 		/* Process the request */
 		if (process(sql, &buf, addr, &req, &tok, &rep) < 0) {
-			fprintf(stderr, "%s: error processing request\n", addr);
+			lprintf("%s: error processing request\n", addr);
 			errcnt++;
 			goto next;
 		}
 
 		/* Send the header */
 		if (SSL_write(ssl, &rep, sizeof(struct kbp_reply)) <= 0) {
-			fprintf(stderr, "%s: header write error\n", addr);
+			lprintf("%s: header write error\n", addr);
 			errcnt++;
 			goto next;
 		}
 
 		/* Finally, send back the data */
 		if (rep.length && SSL_write(ssl, buf, rep.length) <= 0) {
-			fprintf(stderr, "%s: write error: %d\n", addr,
-					rep.length);
+			lprintf("%s: write error: %d\n", addr, rep.length);
 			errcnt++;
 			goto next;
 		}
