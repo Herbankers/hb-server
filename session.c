@@ -350,6 +350,10 @@ static int transfer(MYSQL *sql, struct token *tok, char **buf)
 	free(*buf);
 	*buf = NULL;
 
+	/* Check if amount is positive and therefore valid */
+	if (t.amount < 0)
+		return -1;
+
 	/* Check if the IBAN(s) are valid and exist in the database */
 	if (*t.iban_in) {
 		if (!isiban(t.iban_in))
