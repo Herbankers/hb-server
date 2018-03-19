@@ -5,6 +5,7 @@
 *.o
 *.pdf
 *.pem
+*.png
 *.swp
 
 kech-server

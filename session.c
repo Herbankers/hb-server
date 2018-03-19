@@ -216,7 +216,7 @@ static int login(MYSQL *sql, struct token *tok, char **buf)
 		goto ret;
 	}
 
-	/* TODO Set blocked flag */
+	/* Reset the blocked flag */
 	if (!attempts_update(sql, l.user_id, l.card_id, 1))
 		goto err;
 
