@@ -1,0 +1,40 @@
+digraph {
+	concentrate=true;
+	ratio=0.4;
+	bgcolor="#FFFFFF00";
+
+	subgraph cluster_main {
+		label="Main thread";
+		style=dotted;
+
+		main [label="main()"];
+		wait_conn [label="Wait for connections",shape=diamond];
+	}
+
+	subgraph cluster_session {
+		label="Session thread";
+		style=dotted;
+
+		session [label="session()"];
+		wait_requests [label="Wait for requests",shape=diamond];
+
+		request_accounts [label="KBP_T_ACCOUNTS",shape=box];
+		request_pin_update [label="KBP_T_PIN_UPDATE",shape=box];
+		request_login [label="KBP_T_LOGIN",shape=box];
+		request_logout [label="KBP_T_LOGOUT",shape=box];
+		request_transactions [label="KBP_T_TRANSACTIONS",shape=box];
+		request_transfer [label="KBP_T_TRANSFER",shape=box];
+		request_handler [label="Request handler"];
+		session_start [label="login()"];
+		session_end [label="logout()"];
+	}
+
+	main -> wait_conn -> session -> wait_requests;
+
+	wait_requests -> request_accounts -> request_handler;
+	wait_requests -> request_pin_update -> request_handler;
+	wait_requests -> request_login -> session_start;
+	wait_requests -> request_logout -> session_end;
+	wait_requests -> request_transactions -> request_handler;
+	wait_requests -> request_transfer -> request_handler;
+}

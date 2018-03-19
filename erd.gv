@@ -2,6 +2,7 @@ graph {
 	concentrate=true;
 	rankdir=LR;
 	ratio=0.6;
+	bgcolor="#FFFFFF00";
 
 	A [label="Users",shape=box];
 	a1 [label=<<u>ID</u>>];
