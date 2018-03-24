@@ -1,6 +1,6 @@
 /*
  *
- * Kech Bank Protocol vers. 1
+ * Kech Bank Protocol vers. 2
  * kbp.h
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -36,8 +36,8 @@
 
 /* Kech server MAGIC number ("KECH") */
 #define KBP_MAGIC	0x4B454348
-/* Kech Bank Protocl version */
-#define KBP_VERSION	1
+/* Kech Bank Protocol version */
+#define KBP_VERSION	2
 /* Kech server default port */
 #define KBP_PORT	42069
 
@@ -46,10 +46,10 @@
  * Limits
  */
 
-/* Maximum number of errors before closing the connection (server) */
+/* Maximum number of erroneous requests before closing the connection */
 #define KBP_ERROR_MAX	10
 /* Maximum request/reply data length in bytes (excluding header) */
-#define KBP_LENGTH_MAX	4096
+#define KBP_LENGTH_MAX	65536
 /* Maximum length for an IBAN (per ISO 13616-1:2007) */
 #define KBP_IBAN_MAX	34
 /* Minimum length for a PIN (per ISO 9564-1:2011) */
@@ -58,8 +58,8 @@
 #define KBP_PIN_MAX	12
 /* Maximum times PIN entry can be attempted before blocking the card */
 #define KBP_PINTRY_MAX	3
-/* Session timeout in minutes */
-#define KBP_TIMEOUT	15
+/* Session timeout in seconds */
+#define KBP_TIMEOUT	(15 * 60)
 
 
 /*
@@ -164,8 +164,10 @@ typedef enum {
 
 /* Request header */
 struct kbp_request {
-	/* Magic number (KBP_MAGIC ^ KBP_VERSION) */
+	/* Magic number (KBP_MAGIC) */
 	uint32_t	magic;
+	/* KBP Version (KBP_VERSION) */
+	uint8_t		version;
 	/* Request type */
 	kbp_request_t	type;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
@@ -199,10 +201,12 @@ struct kbp_request_transfer {
 
 /* Reply header */
 struct kbp_reply {
-	/* Magic number (KBP_MAGIC ^ KBP_VERSION) */
+	/* Magic number (KBP_MAGIC) */
 	uint32_t	magic;
-	/* Reply status */
-	kbp_reply_s	status;
+	/* KBP Version (KBP_VERSION) */
+	uint8_t		version;
+	/* Reply status (kbp_reply_s) */
+	int8_t		status;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
 	int32_t		length;
 };
@@ -211,8 +215,8 @@ struct kbp_reply {
 struct kbp_reply_account {
 	/* IBAN */
 	char		iban[KBP_IBAN_MAX + 1];
-	/* Account type */
-	kbp_account_t	type;
+	/* Account type (kbp_account_t) */
+	uint8_t		type;
 	/* Balance in EUR * 100 (2 decimal places) */
 	int64_t		balance;
 };

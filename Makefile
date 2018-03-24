@@ -11,7 +11,15 @@ MAKEFLAGS	:= -s
 CFLAGS		:= -Wall -Wextra -Wpedantic -std=c99 -D_XOPEN_SOURCE=700 `pkg-config --cflags $(PKGLIST)` -g -O0 #-s -Os
 LDFLAGS		:= -lpthread -lscrypt `pkg-config --libs $(PKGLIST)`
 
-kech-server-o	= main.o session.o
+kech-server-o	= \
+		src/accounts.o \
+		src/login.o \
+		src/main.o \
+		src/pin_update.o \
+		src/session.o \
+		src/transactions.o \
+		src/transfer.o \
+		src/utils.o
 
 all: kech-server
 

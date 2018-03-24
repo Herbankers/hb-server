@@ -1,7 +1,7 @@
 /*
  *
  * kech-server
- * kech.h
+ * pin_update.c
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
@@ -25,22 +25,49 @@
  *
  */
 
-#ifndef _KECH_H
-#define _KECH_H
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include <stdbool.h>
+#include <libscrypt.h>
 
-struct connection {
-	int			sock;
-	struct sockaddr_in	addr;
-};
+#include <mysql/mysql.h>
 
-extern SSL_CTX *ctx;
-extern char *sql_host, *sql_db, *sql_user, *sql_pass;
-extern uint16_t sql_port;
+#include "kbp.h"
+#include "kech.h"
 
-void lprintf(const char *msg, ...);
+int pin_update(MYSQL *sql, struct token *tok, char **buf)
+{
+	char pin[KBP_PIN_MAX + 1];
+	char mcf[SCRYPT_MCF_LEN + 1];
+	char *_q, *q = NULL;
 
-void *session(void *_conn);
+	strncpy(pin, *buf, KBP_PIN_MAX + 1);
+	free(*buf);
+	*buf = NULL;
 
-#endif
+	if (strlen(pin) < KBP_PIN_MIN)
+		goto err;
+
+	if (!libscrypt_hash(mcf, pin, SCRYPT_N, SCRYPT_r, SCRYPT_p))
+		goto err;
+
+	/* Prepare the query */
+	_q = "UPDATE `cards` SET `pin` = '%s' WHERE "
+			"`user_id` = %u AND `card_id` = %u";
+	if (!(q = malloc(snprintf(NULL, 0, _q, mcf,
+			tok->user_id, tok->card_id) + 1)))
+		goto err;
+	sprintf(q, _q, mcf, tok->user_id, tok->card_id);
+
+	/* Run it */
+	if (mysql_query(sql, q))
+		goto err;
+
+	free(q);
+	return 0;
+
+err:
+	free(q);
+	return -1;
+}
