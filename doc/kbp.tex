@@ -360,8 +360,8 @@ actieve sessie.
 Indien \texttt{Destination IBAN} leeg is (alleen een null terminator bevat), zal
 een geldopname plaatsvinden.
 
-Indien \texttt{Amount} minder is dan 0, zal \texttt{KBP\_S\_FAIL} worden
-teruggestuurd.
+Indien \texttt{Amount} minder of gelijk is aan 0, zal \texttt{KBP\_S\_FAIL}
+worden teruggestuurd.
 
 Indien \texttt{Source IBAN} niet leeg is en gekoppeld is aan een rekening maar
 het huidige saldo ontoereikend is, zal de transactie mislukken en wordt
