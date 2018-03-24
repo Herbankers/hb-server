@@ -142,7 +142,9 @@ Een reply van de server naar de client heeft de volgende structuur
 	\item \textbf{\texttt{Version}} is een integer om de versie van KBP aan
 		te duiden en miscommunicaties tussen client en server te
 		voorkomen. Dit is een constante (\texttt{KBP\_VERSION}).
-	\item \textbf{\texttt{Status}} TODO
+	\item \textbf{\texttt{Status}} geeft aan of de request met success is
+		verwerkt. Dit verschilt per \texttt{Type} en staat in de
+		volgende sectie beschreven per request.
 	\item \textbf{\texttt{Length}} is de lengte van \texttt{Data} in bytes.
 		Dit mag nooit meer zijn dan \texttt{KBP\_LENGTH\_MAX}.
 	\item \textbf{\texttt{Data}} (optioneel) bevat eventueel de reply data.
@@ -372,8 +374,8 @@ teruggestuurd. Indien er een interne fout optreed, zal \texttt{KBP\_S\_FAIL} de
 \texttt{Status} zijn.
 
 
-\label{sec:sessies}
 \section{Sessies}
+\label{sec:sessies}
 \texttt{KBP\_T\_LOGIN} start een sessie. Zonder een sessie te starten is dit de
 enige request die kan worden uitgevoerd. Indien er wel een andere request wordt
 gestuurd zal de server meteen met \texttt{KBP\_S\_TIMEOUT} antwoorden.
