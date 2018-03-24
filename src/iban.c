@@ -33,6 +33,8 @@
 
 #include "kbp.h"
 
+static const uint8_t prefix_fmt = 0b11001111;
+
 /* Calculate check digits (conforming to ISO 7064:2003) */
 int iban_getcheck(const char *_iban)
 {
@@ -52,34 +54,53 @@ int iban_getcheck(const char *_iban)
 	for (i = 0; i < strlen(iban); i++) {
 		if (isdigit(iban[i])) {
 			n = iban[i] - '0';
-		} else if (isupper(iban[i])) {
-			n = iban[i] - 'A';
+		} else if (isalpha(iban[i])) {
+			if (isupper(iban[i]))
+				n = iban[i] - 'A';
+			else if (islower(iban[i]))
+				n = iban[i] - 'a';
+
 			check = (check * 10 + (n / 10 + 1)) % 97;
 			n %= 10;
-		} else if (islower(iban[i])) {
-			n = iban[i] - 'a';
-			check = (check * 10 + (n / 10 + 1)) % 97;
-			n %= 10;
+		} else {
+			return 0;
 		}
 
 		check = (check * 10 + n) % 97;
 	}
 
-	return 98 - check;
+	/* Return a boolean value if validating, return checksum otherwise */
+	if (iban[2] == '0' && iban[3] == '0')
+		return 98 - check;
+	else
+		return check == 1;
 }
 
 bool iban_validate(const char *iban)
 {
-	int l;
+	int i, l;
 
 	/* Check length IBAN */
 	l = strlen(iban);
 	if (l < KBP_IBAN_MIN || l > KBP_IBAN_MAX)
 		return 0;
 
-	/* Validate IBAN checksum */
-	if (iban_getcheck(iban) != 97)
-		return 0;
+	/* Check prefix format */
+	for (i = 0; i < 8; i++) {
+		if (prefix_fmt & (1 << (7 - i))) {
+			if (!isalpha(iban[i]))
+				return 0;
+		} else {
+			if (!isdigit(iban[i]))
+				return 0;
+		}
+	}
 
-	return 1;
+	/* Check BBAN format */
+	for (i = 8; i < strlen(iban); i++)
+		if (!isdigit(iban[i]))
+			return 0;
+
+	/* Validate IBAN checksum */
+	return iban_getcheck(iban);
 }
