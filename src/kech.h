@@ -54,8 +54,8 @@ extern uint16_t sql_port;
 
 void lprintf(const char *msg, ...);
 
-bool isiban(const char *str);
-int ownsaccount(MYSQL *sql, struct token *tok, const char *iban);
+int iban_getcheck(const char *_iban);
+bool iban_validate(const char *iban);
 
 int accounts_get(MYSQL *sql, struct token *tok, char **buf);
 int login(MYSQL *sql, struct token *tok, char **buf);

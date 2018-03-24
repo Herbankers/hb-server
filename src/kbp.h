@@ -50,6 +50,8 @@
 #define KBP_ERROR_MAX	10
 /* Maximum request/reply data length in bytes (excluding header) */
 #define KBP_LENGTH_MAX	65536
+/* Minimum length for an IBAN */
+#define KBP_IBAN_MIN	9
 /* Maximum length for an IBAN (per ISO 13616-1:2007) */
 #define KBP_IBAN_MAX	34
 /* Minimum length for a PIN (per ISO 9564-1:2011) */

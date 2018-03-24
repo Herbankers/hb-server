@@ -13,13 +13,13 @@ LDFLAGS		:= -lpthread -lscrypt `pkg-config --libs $(PKGLIST)`
 
 kech-server-o	= \
 		src/accounts.o \
+		src/iban.o \
 		src/login.o \
 		src/main.o \
 		src/pin_update.o \
 		src/session.o \
 		src/transactions.o \
-		src/transfer.o \
-		src/utils.o
+		src/transfer.o
 
 all: kech-server
 

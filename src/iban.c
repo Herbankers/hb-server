@@ -1,7 +1,7 @@
 /*
  *
  * kech-server
- * utils.c
+ * iban.c
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
@@ -29,49 +29,57 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include <mysql/mysql.h>
+#include "kbp.h"
 
-#include "kech.h"
-
-/* TODO More checks */
-bool isiban(const char *str)
+/* Calculate check digits (conforming to ISO 7064:2003) */
+int iban_getcheck(const char *_iban)
 {
-	while (*str)
-		if (!isalnum(*str++))
-			return 0;
+	char iban[KBP_IBAN_MAX];
+	char buf[5];
+	int i, n, check = 0;
 
-	return 1;
+	strncpy(iban, _iban, KBP_IBAN_MAX);
+
+	/* Move the first 4 characters to the end of the string */
+	strncpy(buf, iban, 4);
+	buf[4] = '\0';
+	memmove(iban, iban + 4, strlen(iban + 4) + 1);
+	strcat(iban, buf);
+
+	/* Perform MOD 97 on all characters */
+	for (i = 0; i < strlen(iban); i++) {
+		if (isdigit(iban[i])) {
+			n = iban[i] - '0';
+		} else if (isupper(iban[i])) {
+			n = iban[i] - 'A';
+			check = (check * 10 + (n / 10 + 1)) % 97;
+			n %= 10;
+		} else if (islower(iban[i])) {
+			n = iban[i] - 'a';
+			check = (check * 10 + (n / 10 + 1)) % 97;
+			n %= 10;
+		}
+
+		check = (check * 10 + n) % 97;
+	}
+
+	return 98 - check;
 }
 
-int ownsaccount(MYSQL *sql, struct token *tok, const char *iban)
+bool iban_validate(const char *iban)
 {
-	char *_q, *q = NULL;
-	MYSQL_RES *res = NULL;
-	int n;
+	int l;
 
-	/* Prepare the query */
-	_q = "SELECT 1 FROM `accounts` WHERE `user_id` = %u AND "
-			"`iban` = '%s'";
-	if (!(q = malloc(snprintf(NULL, 0, _q, tok->user_id, iban) + 1)))
-		goto err;
-	sprintf(q, _q, tok->user_id, iban);
+	/* Check length IBAN */
+	l = strlen(iban);
+	if (l < KBP_IBAN_MIN || l > KBP_IBAN_MAX)
+		return 0;
 
-	/* Run it */
-	if (mysql_query(sql, q))
-		goto err;
-	if (!(res = mysql_store_result(sql)))
-		goto err;
+	/* Validate IBAN checksum */
+	if (iban_getcheck(iban) != 97)
+		return 0;
 
-	/* Check if there's any rows */
-	n = mysql_num_rows(res);
-
-	free(q);
-	mysql_free_result(res);
-	return n;
-
-err:
-	free(q);
-	mysql_free_result(res);
-	return -1;
+	return 1;
 }

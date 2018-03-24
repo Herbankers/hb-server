@@ -34,6 +34,38 @@
 #include "kbp.h"
 #include "kech.h"
 
+static int ownsaccount(MYSQL *sql, struct token *tok, const char *iban)
+{
+	char *_q, *q = NULL;
+	MYSQL_RES *res = NULL;
+	int n;
+
+	/* Prepare the query */
+	_q = "SELECT 1 FROM `accounts` WHERE `user_id` = %u AND "
+			"`iban` = '%s'";
+	if (!(q = malloc(snprintf(NULL, 0, _q, tok->user_id, iban) + 1)))
+		goto err;
+	sprintf(q, _q, tok->user_id, iban);
+
+	/* Run it */
+	if (mysql_query(sql, q))
+		goto err;
+	if (!(res = mysql_store_result(sql)))
+		goto err;
+
+	/* Check if there's any rows */
+	n = mysql_num_rows(res);
+
+	free(q);
+	mysql_free_result(res);
+	return n;
+
+err:
+	free(q);
+	mysql_free_result(res);
+	return -1;
+}
+
 static int modify(MYSQL *sql, const char *iban, int64_t d)
 {
 	char *_q, *q = NULL;
@@ -101,14 +133,14 @@ int transfer(MYSQL *sql, struct token *tok, char **buf)
 
 	/* Check if the IBAN(s) are valid and exist in the database */
 	if (*t.iban_in) {
-		if (!isiban(t.iban_in))
+		if (!iban_validate(t.iban_in))
 			return -1;
 		if (modify(sql, t.iban_in, 0) < 0)
 			return -1;
 	}
 
 	if (*t.iban_out) {
-		if (!isiban(t.iban_out))
+		if (!iban_validate(t.iban_out))
 			return -1;
 		if (modify(sql, t.iban_out, 0) < 0)
 			return -1;
