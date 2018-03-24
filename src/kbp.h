@@ -1,6 +1,6 @@
 /*
  *
- * Kech Bank Protocol vers. 2
+ * Kech Bank Protocol vers. 3
  * kbp.h
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -37,7 +37,7 @@
 /* Kech server MAGIC number ("KECH") */
 #define KBP_MAGIC	0x4B454348
 /* Kech Bank Protocol version */
-#define KBP_VERSION	2
+#define KBP_VERSION	3
 /* Kech server default port */
 #define KBP_PORT	42069
 
@@ -65,15 +65,26 @@
 
 
 /*
- * Account types
+ * Types
  */
 
+/* Account types */
 typedef enum {
 	/* Checkings account */
 	KBP_A_CHECKING,
 	/* Savings account */
 	KBP_A_SAVINGS
 } kbp_account_t;
+
+/* Login results */
+typedef enum {
+	/* Successful login */
+	KBP_L_GRANTED,
+	/* Invalid PIN */
+	KBP_L_DENIED,
+	/* Blocked card */
+	KBP_L_BLOCKED
+} kbp_login_res;
 
 
 /*
@@ -94,7 +105,7 @@ typedef enum {
 	 * Request a PIN change for card that initiated the active session.
 	 *
 	 * Needs: active session
-	 * Requests: char pin[KBP_PIN_MAX + 1];
+	 * Requests: char pin[KBP_PIN_MAX + 1]
 	 * Returns: -
 	 */
 	KBP_T_PIN_UPDATE,
@@ -111,7 +122,7 @@ typedef enum {
 	 *
 	 * Needs: -
 	 * Requests: struct kbp_request_login
-	 * Returns: kbp_reply_login
+	 * Returns: uint8_t (kbp_login_res)
 	 */
 	KBP_T_LOGIN,
 	/*
@@ -170,8 +181,8 @@ struct kbp_request {
 	uint32_t	magic;
 	/* KBP Version (KBP_VERSION) */
 	uint8_t		version;
-	/* Request type */
-	kbp_request_t	type;
+	/* Request type (kbp_request_t) */
+	uint8_t		type;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
 	int32_t		length;
 };
@@ -222,16 +233,6 @@ struct kbp_reply_account {
 	/* Balance in EUR * 100 (2 decimal places) */
 	int64_t		balance;
 };
-
-/* Login reply */
-typedef enum {
-	/* Successful login */
-	KBP_L_GRANTED,
-	/* Invalid PIN */
-	KBP_L_DENIED,
-	/* Blocked card */
-	KBP_L_BLOCKED
-} kbp_reply_login;
 
 /* Transaction reply */
 struct kbp_reply_transaction {

@@ -41,6 +41,7 @@ struct connection {
 	struct sockaddr_in	addr;
 };
 
+/* Session token */
 struct token {
 	bool		valid;
 	uint32_t	user_id;

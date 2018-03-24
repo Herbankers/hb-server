@@ -38,9 +38,9 @@ static const uint8_t prefix_fmt = 0b11001111;
 /* Calculate check digits (conforming to ISO 7064:2003) */
 int iban_getcheck(const char *_iban)
 {
-	char iban[KBP_IBAN_MAX];
-	char buf[5];
-	int i, n, check = 0;
+	char iban[KBP_IBAN_MAX], buf[5];
+	unsigned int i;
+	int n, check = 0;
 
 	strncpy(iban, _iban, KBP_IBAN_MAX);
 
@@ -78,7 +78,8 @@ int iban_getcheck(const char *_iban)
 
 bool iban_validate(const char *iban)
 {
-	int i, l;
+	unsigned int i;
+	int l;
 
 	/* Check length IBAN */
 	l = strlen(iban);

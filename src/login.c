@@ -64,14 +64,13 @@ err:
 	return 0;
 }
 
-/* FIXME This entire function is a fucking mess */
 int login(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_request_login l;
+	uint8_t *lres = NULL;
 	char *_q, *q = NULL;
 	MYSQL_RES *res = NULL;
 	MYSQL_ROW row;
-	int _res = KBP_L_GRANTED;
 	char *r;
 
 	memcpy(&l, *buf, sizeof(l));
@@ -95,44 +94,41 @@ int login(MYSQL *sql, struct token *tok, char **buf)
 	if (!(row = mysql_fetch_row(res)))
 		goto err;
 
+	/* Allocate reply */
+	if (!(lres = malloc(1)))
+		goto err;
+	*buf = (char *) lres;
+
 	/* Check if card is blocked */
 	if (strtol(row[1], NULL, 10) >= KBP_PINTRY_MAX) {
-		_res = KBP_L_BLOCKED;
-		goto ret;
+		*lres = KBP_L_BLOCKED;
+	} else {
+		/* Check if the entered password is correct */
+		if (libscrypt_check(row[0], l.pin) <= 0) {
+			if (!attempts_update(sql, l.user_id, l.card_id, 0))
+				goto err;
+			*lres = KBP_L_DENIED;
+		} else {
+			/* Reset the blocked flag */
+			if (!attempts_update(sql, l.user_id, l.card_id, 1))
+				goto err;
+
+			tok->valid = 1;
+			tok->user_id = l.user_id;
+			tok->card_id = l.card_id;
+			tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
+
+			*lres = KBP_L_GRANTED;
+		}
 	}
 
-	/* Check if the entered password is correct */
-	if (libscrypt_check(row[0], l.pin) <= 0) {
-		if (!attempts_update(sql, l.user_id, l.card_id, 0))
-			goto err;
-		_res = KBP_L_DENIED;
-		goto ret;
-	}
-
-	/* Reset the blocked flag */
-	if (!attempts_update(sql, l.user_id, l.card_id, 1))
-		goto err;
-
-	tok->valid = 1;
-	tok->user_id = l.user_id;
-	tok->card_id = l.card_id;
-	tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
-
-	goto ret;
-
-err:
-	_res = -1;
-
-ret:
 	free(q);
 	mysql_free_result(res);
+	return 1;
 
-	if (_res >= 0) {
-		if (!(r = malloc(sizeof(kbp_reply_login))))
-			return -1;
-		*buf = (char *) r;
-		*r = _res;
-	}
-
-	return _res;
+err:
+	free(lres);
+	free(q);
+	mysql_free_result(res);
+	return -1;
 }

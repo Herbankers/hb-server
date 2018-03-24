@@ -93,18 +93,17 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		if ((res = login(sql, tok, buf)) < 0) {
 			rep->status = KBP_S_FAIL;
 		} else {
-			if ((kbp_reply_login) **buf == KBP_L_GRANTED)
+			if ((kbp_login_res) **buf == KBP_L_GRANTED)
 				lprintf("%s: session login: %u,%u\n", addr,
 						tok->user_id, tok->card_id);
 
 			rep->status = KBP_S_OK;
-			rep->length = sizeof(kbp_reply_login);
-			return 1;
 		}
 		break;
 	case KBP_T_LOGOUT:
-		lprintf("%s: session logout: %u,%u\n", addr, tok->user_id,
-				tok->card_id);
+		if (tok->valid)
+			lprintf("%s: session logout: %u,%u\n", addr,
+					tok->user_id, tok->card_id);
 
 		tok->valid = 0;
 		rep->status = KBP_S_TIMEOUT;
