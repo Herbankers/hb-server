@@ -1,6 +1,6 @@
 /*
  *
- * Kech Bank Protocol vers. 3
+ * Kech Bank Protocol vers. 4
  * kbp.h
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -37,7 +37,7 @@
 /* Kech server MAGIC number ("KECH") */
 #define KBP_MAGIC	0x4B454348
 /* Kech Bank Protocol version */
-#define KBP_VERSION	3
+#define KBP_VERSION	4
 /* Kech server default port */
 #define KBP_PORT	42069
 
@@ -184,7 +184,7 @@ struct kbp_request {
 	/* Request type (kbp_request_t) */
 	uint8_t		type;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
-	int32_t		length;
+	uint32_t	length;
 };
 
 /* Login request */
@@ -221,7 +221,7 @@ struct kbp_reply {
 	/* Reply status (kbp_reply_s) */
 	int8_t		status;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
-	int32_t		length;
+	uint32_t	length;
 };
 
 /* Account reply */

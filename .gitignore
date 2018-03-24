@@ -1,11 +1,18 @@
+*.aux
+*.aux
 *.crt
 *.csr
+*.fdb_latexmk
+*.fls
 *.key
 *.log
+*.log
 *.o
+*.out
 *.pdf
 *.pem
 *.png
 *.swp
+*.synctex.gz
 
 kech-server

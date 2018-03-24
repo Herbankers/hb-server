@@ -25,6 +25,7 @@
  *
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,7 @@ int pin_update(MYSQL *sql, struct token *tok, char **buf)
 	char pin[KBP_PIN_MAX + 1];
 	char mcf[SCRYPT_MCF_LEN + 1];
 	char *_q, *q = NULL;
+	int i;
 
 	strncpy(pin, *buf, KBP_PIN_MAX + 1);
 	free(*buf);
@@ -48,6 +50,11 @@ int pin_update(MYSQL *sql, struct token *tok, char **buf)
 
 	if (strlen(pin) < KBP_PIN_MIN)
 		goto err;
+
+	/* Check if PIN only contains numeric characters */
+	for (i = 0; i < strlen(pin); i++)
+		if (!isdigit(pin[i]))
+			goto err;
 
 	if (!libscrypt_hash(mcf, pin, SCRYPT_N, SCRYPT_r, SCRYPT_p))
 		goto err;
