@@ -42,7 +42,7 @@ int pin_update(MYSQL *sql, struct token *tok, char **buf)
 	char pin[KBP_PIN_MAX + 1];
 	char mcf[SCRYPT_MCF_LEN + 1];
 	char *_q, *q = NULL;
-	int i;
+	unsigned int i;
 
 	strncpy(pin, *buf, KBP_PIN_MAX + 1);
 	free(*buf);

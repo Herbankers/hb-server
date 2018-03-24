@@ -71,7 +71,6 @@ int login(MYSQL *sql, struct token *tok, char **buf)
 	char *_q, *q = NULL;
 	MYSQL_RES *res = NULL;
 	MYSQL_ROW row;
-	char *r;
 
 	memcpy(&l, *buf, sizeof(l));
 	free(*buf);

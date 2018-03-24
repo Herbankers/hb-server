@@ -33,7 +33,7 @@
 
 #include "kbp.h"
 
-static const uint8_t prefix_fmt = 0b11001111;
+static const uint8_t prefix_fmt = 0xCF /* 0b11001111 */;
 
 /* Calculate check digits (conforming to ISO 7064:2003) */
 int iban_getcheck(const char *_iban)
