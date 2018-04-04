@@ -67,6 +67,7 @@ err:
 int login(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_request_login l;
+	uint32_t user_id, card_id;
 	uint8_t *lres = NULL;
 	char *_q, *q = NULL;
 	MYSQL_RES *res = NULL;
@@ -77,11 +78,11 @@ int login(MYSQL *sql, struct token *tok, char **buf)
 	*buf = NULL;
 
 	/* Prepare the query */
-	_q = "SELECT `pin`, `attempts` FROM `cards` WHERE `user_id` = %u AND "
-			"`card_id` = %u";
-	if (!(q = malloc(snprintf(NULL, 0, _q, l.user_id, l.card_id) + 1)))
+	_q = "SELECT `user_id`, `card_id`, `pin`, `attempts` FROM `cards` "
+			"WHERE `id` = '%s'";
+	if (!(q = malloc(snprintf(NULL, 0, _q, l.uid) + 1)))
 		goto err;
-	sprintf(q, _q, l.user_id, l.card_id);
+	sprintf(q, _q, l.uid);
 
 	/* Run it */
 	if (mysql_query(sql, q))
@@ -99,22 +100,25 @@ int login(MYSQL *sql, struct token *tok, char **buf)
 	*buf = (char *) lres;
 
 	/* Check if card is blocked */
-	if (strtol(row[1], NULL, 10) >= KBP_PINTRY_MAX) {
+	if (strtol(row[3], NULL, 10) >= KBP_PINTRY_MAX) {
 		*lres = KBP_L_BLOCKED;
 	} else {
+		user_id = strtol(row[0], NULL, 10);
+		card_id = strtol(row[1], NULL, 10);
+
 		/* Check if the entered password is correct */
-		if (libscrypt_check(row[0], l.pin) <= 0) {
-			if (!attempts_update(sql, l.user_id, l.card_id, 0))
+		if (libscrypt_check(row[2], l.pin) <= 0) {
+			if (!attempts_update(sql, user_id, card_id, 0))
 				goto err;
 			*lres = KBP_L_DENIED;
 		} else {
 			/* Reset the blocked flag */
-			if (!attempts_update(sql, l.user_id, l.card_id, 1))
+			if (!attempts_update(sql, user_id, card_id, 1))
 				goto err;
 
 			tok->valid = 1;
-			tok->user_id = l.user_id;
-			tok->card_id = l.card_id;
+			tok->user_id = user_id;
+			tok->card_id = card_id;
 			tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
 
 			*lres = KBP_L_GRANTED;

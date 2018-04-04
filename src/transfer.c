@@ -41,11 +41,11 @@ static int ownsaccount(MYSQL *sql, struct token *tok, const char *iban)
 	int n;
 
 	/* Prepare the query */
-	_q = "SELECT 1 FROM `accounts` WHERE `user_id` = %u AND "
-			"`iban` = '%s'";
-	if (!(q = malloc(snprintf(NULL, 0, _q, tok->user_id, iban) + 1)))
+	_q = "SELECT 1 FROM `accounts` WHERE `iban` = '%s' AND "
+			"`user_id` = %u";
+	if (!(q = malloc(snprintf(NULL, 0, _q, iban, tok->user_id) + 1)))
 		goto err;
-	sprintf(q, _q, tok->user_id, iban);
+	sprintf(q, _q, iban, iban, tok->user_id);
 
 	/* Run it */
 	if (mysql_query(sql, q))

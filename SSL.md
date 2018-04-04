@@ -10,7 +10,7 @@ openssl genrsa -des3 -out ca.key 4096
 
 Then, sign a new root CA to install onto Kech Bank ATMs:
 ```
-openssl req -x509 -new -nodes -key ca.key -sha256 -out ca.pem
+openssl req -x509 -new -nodes -key ca.key -sha256 -out ca.pem -days 3650
 ```
 
 Now, create a new key for the server itself:
@@ -26,7 +26,7 @@ openssl req -new -key server.key -out server.csr
 
 Finally, sign the new certificate:
 ```
-openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -out server.crt -sha256
+openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out server.crt -days 3650 -sha256
 ```
 
 The server can now be started with the following command line arguments:
@@ -47,7 +47,7 @@ openssl genrsa -des3 -out clientca.key 4096
 
 Then, sign a new root CA:
 ```
-openssl req -x509 -new -nodes -key clientca.key -sha256 -out clientca.pem
+openssl req -x509 -new -nodes -key clientca.key -out clientca.pem -days 3650 -sha256
 ```
 
 ## For every ATM
@@ -65,7 +65,7 @@ openssl req -new -key client.key -out client.csr
 
 Finally, sign the new certificate with the CA on the server:
 ```
-openssl x509 -req -in client.csr -CA clientca.pem -CAkey clientca.key -out client.crt -sha256
+openssl x509 -req -in client.csr -CA clientca.pem -CAkey clientca.key -CAcreateserial -out client.crt -sha256 -days 3650
 ```
 
 The ATM can now be started with the following command line arguments:

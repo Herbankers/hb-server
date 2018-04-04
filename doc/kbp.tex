@@ -80,11 +80,12 @@ kbp\_request}):
 \begin{bytefield}{32}
 	\bitheader{0, 7, 8, 15, 16, 31} \\
 	\begin{leftwordgroup}{Header}
-		\wordbox{1}{Magic} \\
-		\bitbox{8}{Version} & \bitbox{8}{Type} & \bitbox{16}{Length} \\
-		\bitbox{16}{Length} & \bitbox[lrt]{16}{}
+		\wordbox{1}{Magic 00:31} \\
+		\bitbox{8}{Version 32:39} & \bitbox{8}{Type 40:47} &
+		\bitbox{16}{Length 48:63} \\
+		\bitbox{16}{Length 64:79} & \bitbox[lrt]{16}{}
 	\end{leftwordgroup} \\
-	\wordbox[lrb]{3}{Data}
+	\wordbox[lrb]{3}{Data \ldots}
 \end{bytefield}
 \end{center}
 
@@ -128,11 +129,12 @@ Een reply van de server naar de client heeft de volgende structuur
 \begin{bytefield}{32}
 	\bitheader{0, 15, 16, 31} \\
 	\begin{leftwordgroup}{Header}
-		\wordbox{1}{Magic} \\
-		\bitbox{8}{Version} & \bitbox{8}{Status} & \bitbox{16}{Length} \\
-		\bitbox{16}{Length} & \bitbox[lrt]{16}{}
+		\wordbox{1}{Magic 00:31} \\
+		\bitbox{8}{Version 32:39} & \bitbox{8}{Status 40:47} &
+		\bitbox{16}{Length 48:63} \\
+		\bitbox{16}{Length 64:79} & \bitbox[lrt]{16}{}
 	\end{leftwordgroup} \\
-	\wordbox[lrb]{3}{Data}
+	\wordbox[lrb]{3}{Data \ldots}
 \end{bytefield}
 \end{center}
 
@@ -171,18 +173,19 @@ kbp\_reply\_account[n]}):
 \begin{center}
 \begin{bytefield}{32}
 	\bitheader{0, 23, 24, 31} \\
-	\wordbox[lrt]{1}{IBAN} \\
+	\wordbox[lrt]{1}{IBAN 00:279} \\
 	\skippedwords \\
 	\wordbox[lr]{1}{} \\
-	\bitbox[lrb]{24}{} & \bitbox{8}{Type} \\
-	\wordbox{2}{Balance}
+	\bitbox[lrb]{24}{} & \bitbox{8}{Type 280:287} \\
+	\wordbox{2}{Balance 288:351}
 \end{bytefield}
 \end{center}
 
 \begin{itemize}
 	\item \textbf{\texttt{IBAN}} is de IBAN van de rekening. Dit veld is
 		altijd \texttt{KBP\_IBAN\_MAX} + 1 lang en moet worden
-		afgesloten met een null terminator.
+		afgesloten met een null terminator. Alleen ASCII tekens zijn
+		toegestaan.
 	\item \textbf{\texttt{Type}} is het type rekening. De rekening types
 		staan in de \texttt{kbp\_account\_t} enumerator.
 	\item \textbf{\texttt{Balance}} is het huidige saldo van de rekening in
@@ -212,7 +215,7 @@ Deze request heeft de volgende request data nodig:
 \begin{center}
 \begin{bytefield}{32}
 	\bitheader{0, 31} \\
-	\wordbox[lrt]{1}{PIN} \\
+	\wordbox[lrt]{1}{PIN 00:103} \\
 	\skippedwords \\
 	\wordbox[lrb]{1}{}
 \end{bytefield}
@@ -223,7 +226,7 @@ Deze request heeft de volgende request data nodig:
 		bestaan uit numerieke karakters en is minimaal
 		\texttt{KBP\_PIN\_MIN} en maximaal \texttt{KBP\_PIN\_MAX} in
 		lengte. De string moet worden afgesloten met een null
-		terminator.
+		terminator. Alleen ASCII tekens zijn toegestaan.
 \end{itemize}
 
 Deze request heeft geen reply data.
@@ -241,26 +244,25 @@ Deze request heeft de volgende request data nodig:
 
 \begin{center}
 \begin{bytefield}{32}
-	\bitheader{0, 31} \\
-	\wordbox{1}{User ID} \\
-	\wordbox{1}{Card ID} \\
-	\wordbox[lrt]{1}{PIN} \\
+	\bitheader{0, 23, 24, 31} \\
+	\wordbox[lrt]{1}{Card UID 00:55} \\
+	\bitbox[lrb]{24}{} & \bitbox[lrt]{8}{} \\
+	\wordbox[lr]{1}{PIN 56:159} \\
 	\skippedwords \\
 	\wordbox[lrb]{1}{}
 \end{bytefield}
 \end{center}
 
 \begin{itemize}
-	\item \textbf{\texttt{User ID}} is de unieke identifier gelezen van de
-		RFID kaart. De User ID kan nooit veranderen.
-	\item \textbf{\texttt{Card ID}} is de unieke identifier van de kaart.
-		Dit getal wordt afzonderlijk per gebruiker (User ID)
+	\item \textbf{\texttt{Card UID}} De UID van de RFID kaart. De UID
+		verwijst intern naar een \texttt{User ID} en \texttt{Card ID}.
+		\texttt{De Card ID} wordt afzonderlijk per gebruiker (User ID)
 		bijgehouden.
 	\item \textbf{\texttt{PIN}} is de bijbehorende PIN code. Een PIN kan
 		alleen bestaan uit numerieke karakters en is minimaal
 		\texttt{KBP\_PIN\_MIN} en maximaal \texttt{KBP\_PIN\_MAX} in
 		lengte. De string moet worden afgesloten met een null
-		terminator.
+		terminator. Alleen ASCII tekens zijn toegestaan.
 \end{itemize}
 
 Deze request heeft de volgende reply data:
@@ -268,7 +270,7 @@ Deze request heeft de volgende reply data:
 \begin{center}
 	\begin{bytefield}{8}
 	\bitheader{0, 7} \\
-	\wordbox{1}{kbp\_login\_res}
+	\wordbox{1}{kbp\_login\_res \tiny 00:07}
 \end{bytefield}
 \end{center}
 
@@ -287,6 +289,9 @@ De waarde van \texttt{kbp\_login\_res} kan een van de volgende constanten zijn:
 
 Reply data zal niet worden verstuurd indien \texttt{Status} niet
 \texttt{KBP\_S\_OK} is.
+
+Een counter voor \texttt{KBP\_PINTRY\_MAX} zal door de server intern worden
+bijgehouden TODO
 
 Indien de request met success is verwerkt, zal \texttt{KBP\_S\_OK} worden
 teruggestuurd. Indien er een interne fout optreed, zal \texttt{KBP\_S\_FAIL} de
@@ -326,15 +331,15 @@ Deze request heeft de volgende request data nodig:
 \begin{center}
 \begin{bytefield}{32}
 	\bitheader{0, 23, 24, 31} \\
-	\wordbox[lrt]{1}{Source IBAN} \\
+	\wordbox[lrt]{1}{Source IBAN 00:279} \\
 	\skippedwords \\
 	\wordbox[lr]{1}{} \\
 	\bitbox[lrb]{24}{} & \bitbox[lrt]{8}{} \\
-	\wordbox[lr]{1}{Destination IBAN} \\
+	\wordbox[lr]{1}{Destination IBAN 280:559} \\
 	\skippedwords \\
 	\wordbox[lr]{1}{} \\
 	\bitbox[lrb]{16}{} & \bitbox[lrt]{16}{} \\
-	\wordbox[lr]{1}{Amount} \\
+	\wordbox[lr]{1}{Amount 560:623} \\
 	\bitbox[lrb]{16}{} & \bitbox{16}{\rule{\width}{\height}}
 \end{bytefield}
 \end{center}
@@ -344,10 +349,12 @@ Deze request heeft de volgende request data nodig:
 		Deze IBAN moet aan en rekening toegankelijk door de gebruiker
 		geassocieerd met de actieve sessie gebonden zijn. Dit veld is
 		altijd \texttt{KBP\_IBAN\_MAX} + 1 lang en moet worden
-		afgesloten met een null terminator.
+		afgesloten met een null terminator. Alleen ASCII tekens zijn
+		toegestaan.
 	\item \textbf{\texttt{Destination IBAN}} is de IBAN van de bestemming
 		rekening. Dit veld is altijd \texttt{KBP\_IBAN\_MAX} + 1 lang en
-		moet worden afgesloten met een null terminator.
+		moet worden afgesloten met een null terminator. Alleen ASCII
+		tekens zijn toegestaan.
 	\item \textbf{\texttt{Amount}} is het aantal in $\text{EUR} \cdot 100$
 		($\text{EUR}\ 12.50$ wordt bijvoorbeeld $1250$).
 \end{itemize}

@@ -16,17 +16,17 @@ graph {
 	b4 [label="Attempts"];
 
 	C [label="Accounts",shape=box];
-	c1 [label=<<u>ID</u>>];
+	c1 [label=<<u>IBAN</u>>];
 	c2 [label="Type"];
-	c3 [label="IBAN"];
-	c4 [label="Balance"];
+	c3 [label="Balance"];
 
 	D [label="Transactions",shape=box];
 	d1 [label=<<u>ID</u>>];
 	d2 [label="Status"];
-	d3 [label="Source IBAN"];
-	d4 [label="Destination IBAN"];
-	d5 [label="Amount"];
+	d3 [label="Timestamp"];
+	d4 [label="Source IBAN"];
+	d5 [label="Destination IBAN"];
+	d6 [label="Amount"];
 
 	r1 [label="has",shape=diamond];
 	r2 [label="has",shape=diamond];
@@ -47,7 +47,6 @@ graph {
 	C -- c1;
 	C -- c2;
 	C -- c3;
-	C -- c4;
 
 	/* Transactions */
 	D -- d1;
@@ -55,6 +54,7 @@ graph {
 	D -- d3;
 	D -- d4;
 	D -- d5;
+	D -- d6;
 
 	B -- r1 [label="N",color="black:white:black"];
 	C -- r2 [label="N",color="black:white:black"];
@@ -89,11 +89,11 @@ graph {
 		b4 -- "An integer to indicate\nhow many attempts\nhave been made to\nenter the PIN.\nResets to 0 after login.";
 
 		c2 -- "Indicates whether the\naccount is checking or savings.";
-		c4 -- n1;
+		c3 -- n1;
 
 		d2 -- "Transaction status.\nCan either be pending, canceled or\n finished."
-		d3 -- "An empty source signifies a deposit.";
-		d4 -- "An empty destination signifies\na withdrawal.";
-		d5 -- n1;
+		d4 -- "An empty source signifies a deposit.";
+		d5 -- "An empty destination signifies\na withdrawal.";
+		d6 -- n1;
 	}
 }
