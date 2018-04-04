@@ -160,22 +160,29 @@ err:
 static int run(void)
 {
 	struct connection *conn;
-	struct sockaddr_in server;
+	struct sockaddr_in6 server;
 	pthread_t thread;
-	int sock;
+	int sock, on = 1;
 	socklen_t socklen;
 
 	/* Create the socket */
-	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+	if ((sock = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
 		fprintf(stderr, "unable to create socket: %s\n",
 				strerror(errno));
 		return -1;
 	}
 
+	/* Allow socket to be reused */
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
+			sizeof(on)) < 0) {
+		fprintf(stderr, "%s\n", strerror(errno));
+		return -1;
+	}
+
 	/* Bind the socket */
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(port);
+	server.sin6_family = AF_INET6;
+	server.sin6_addr = in6addr_any;
+	server.sin6_port = htons(port);
 
 	lprintf("binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
@@ -380,10 +387,9 @@ int main(int argc, char **argv)
 		strcpy(log_path, s);
 	}
 
-	/* TODO IPv6? */
 	lprintf("welcome to the Kech Bank server!\n");
 
-	lprintf("the server will be hosted on localhost:%u\n", port);
+	lprintf("the server will be hosted on port %u\n", port);
 
 	if (init() < 0)
 		goto err;

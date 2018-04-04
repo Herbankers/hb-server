@@ -164,6 +164,7 @@ void *session(void *_conn)
 	memset(&tok, 0, sizeof(tok));
 
 	/* Get client IP */
+	/* FIXME IPv6 */
 	inet_ntop(AF_INET, &conn->addr.sin_addr, addr,
 			INET_ADDRSTRLEN);
 	printf("%s: new connection\n", addr);
