@@ -34,8 +34,18 @@
 
 #include <mysql/mysql.h>
 
-#include <openssl/err.h>
-#include <openssl/ssl.h>
+#if SSLSOCK
+#  include <openssl/err.h>
+#  include <openssl/ssl.h>
+
+#  define READ(b, n)	SSL_read(ssl, (b), (n))
+#  define WRITE(b, n)	SSL_write(ssl, (b), (n))
+#else
+#  include <errno.h>
+
+#  define READ(b, n)	read(conn->sock, (b), (n))
+#  define WRITE(b, n)	write(conn->sock, (b), (n))
+#endif
 
 #include "kbp.h"
 #include "kech.h"
@@ -157,7 +167,9 @@ void *session(void *_conn)
 	char *buf, host[INET_ADDRSTRLEN];
 	int res, errcnt = 0;
 	MYSQL *sql = NULL;
+#if SSLSOCK
 	SSL *ssl = NULL;
+#endif
 
 	rep.magic = KBP_MAGIC;
 	rep.version = KBP_VERSION;
@@ -170,6 +182,7 @@ void *session(void *_conn)
 	printf("%s: new connection\n", host);
 	fflush(stdout);
 
+#if SSLSOCK
 	/* Setup an SSL/TLS connection */
 	if (!(ssl = SSL_new(ctx))) {
 		lprintf("unable to allocate SSL structure\n");
@@ -191,6 +204,7 @@ void *session(void *_conn)
 		lprintf("certificate verfication failed\n");
 		goto ret;
 	}
+#endif
 
 	/* Connect to the database */
 	if (!(sql = mysql_init(NULL))) {
@@ -214,9 +228,14 @@ void *session(void *_conn)
 		}
 
 		/* Wait for requests from the client */
-		if ((res = SSL_read(ssl, &req, sizeof(req))) <= 0) {
+		if ((res = READ(&req, sizeof(req))) <= 0) {
+#if SSLSOCK
 			if (SSL_get_error(ssl, res) == SSL_ERROR_ZERO_RETURN)
 				break;
+#else
+			/* FIXME Check if still connected */
+			break;
+#endif
 			lprintf("%s: header read error\n", host);
 			errcnt++;
 			continue;
@@ -241,7 +260,7 @@ void *session(void *_conn)
 				break;
 			}
 
-			if (SSL_read(ssl, buf, req.length) <= 0) {
+			if (READ(buf, req.length) <= 0) {
 				lprintf("%s: read error\n", host);
 				errcnt++;
 				goto next;
@@ -258,14 +277,14 @@ void *session(void *_conn)
 		}
 
 		/* Send the header */
-		if (SSL_write(ssl, &rep, sizeof(struct kbp_reply)) <= 0) {
+		if (WRITE(&rep, sizeof(struct kbp_reply)) <= 0) {
 			lprintf("%s: header write error\n", host);
 			errcnt++;
 			goto next;
 		}
 
 		/* Finally, send back the data */
-		if (rep.length && SSL_write(ssl, buf, rep.length) <= 0) {
+		if (rep.length && WRITE(buf, rep.length) <= 0) {
 			lprintf("%s: write error: %d\n", host, rep.length);
 			errcnt++;
 			goto next;
@@ -288,7 +307,9 @@ ret:
 
 	/* Close the client connection */
 	close(conn->sock);
+#if SSLSOCK
 	SSL_free(ssl);
+#endif
 	free(_conn);
 
 	pthread_exit(NULL);

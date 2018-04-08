@@ -38,20 +38,28 @@
 
 #include <mysql/mysql.h>
 
-#include <openssl/err.h>
-#include <openssl/ssl.h>
+#if SSLSOCK
+#  include <openssl/err.h>
+#  include <openssl/ssl.h>
+#else
+#  include <errno.h>
+#endif
 
 #include "kech.h"
 #include "kbp.h"
 
 static uint16_t port = KBP_PORT;
+#if SSLSOCK
 static char *ca, *cert, *key;
+#endif
 
 static char *log_path;
 static pthread_mutex_t log_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool verbose;
 
+#if SSLSOCK
 SSL_CTX *ctx;
+#endif
 
 char *sql_host, *sql_db, *sql_user, *sql_pass;
 uint16_t sql_port;
@@ -91,11 +99,14 @@ void lprintf(const char *msg, ...)
 
 static int init(void)
 {
+#if SSLSOCK
 	const SSL_METHOD *met;
+#endif
 
 	/* Intialize MySQL */
 	mysql_library_init(0, 0, NULL);
 
+#if SSLSOCK
 	/* Initialize OpenSSL */
 	lprintf("initializing OpenSSL...\n");
 	SSL_library_init();
@@ -151,6 +162,9 @@ err:
 		SSL_CTX_free(ctx);
 
 	return -1;
+#else
+	return 0;
+#endif
 }
 
 /*
@@ -209,6 +223,7 @@ static int run(void)
 						&socklen)) < 0) {
 			fprintf(stderr, "%s\n", strerror(errno));
 			free(conn);
+			continue;
 		}
 
 		/* Create a thread for new connections */
@@ -226,9 +241,11 @@ static void usage(char *prog)
 {
 	printf("Usage: %s [OPTION...]\n\n%s", prog,
 			"  -p PORT NUMBER       port number to bind socket to\n"
+#if SSLSOCK
 			"  -C FILE              CA file to use\n"
 			"  -c FILE              certificate file to use\n"
 			"  -k FILE              private key file to use\n"
+#endif
 			"  -i IP ADDRESS        MySQL database host\n"
 			"  -P PORT NUMBER       MySQL database port\n"
 			"  -d DB                MySQL database name\n"
@@ -244,10 +261,12 @@ static void fini(void)
 {
 	mysql_library_end();
 
+#if SSLSOCK
 	SSL_CTX_free(ctx);
 
 	free(cert);
 	free(key);
+#endif
 	free(sql_host);
 	free(sql_db);
 	free(sql_user);
@@ -261,12 +280,17 @@ int main(int argc, char **argv)
 	int c;
 
 	/* Parse arguments */
-	while ((c = getopt(argc, argv, "p:C:c:k:I:P:d:u:a:l:hv")) != -1) {
+	while ((c = getopt(argc, argv, "p:"
+#if SSLSOCK
+			"C:c:k:"
+#endif
+			"I:P:d:u:a:l:hv")) != -1) {
 		switch (c) {
 		/* Port number */
 		case 'p':
 			port = strtol(optarg, NULL, 10);
 			break;
+#if SSLSOCK
 		/* CA file path */
 		case 'C':
 			if (!(ca = malloc(strlen(optarg) + 1)))
@@ -285,6 +309,7 @@ int main(int argc, char **argv)
 				goto err;
 			strcpy(key, optarg);
 			break;
+#endif
 		/* MySQL database host */
 		case 'I':
 			if (!(sql_host = malloc(strlen(optarg) + 1)))
@@ -323,8 +348,11 @@ int main(int argc, char **argv)
 		case 'h':
 			usage(argv[0]);
 
+#if SSLSOCK
+			free(ca);
 			free(cert);
 			free(key);
+#endif
 			free(sql_host);
 			free(sql_db);
 			free(sql_user);
@@ -342,6 +370,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+#if SSLSOCK
 	if (!ca) {
 		fprintf(stderr, "please specify a CA file\n");
 		usage(argv[0]);
@@ -355,6 +384,7 @@ int main(int argc, char **argv)
 		usage(argv[0]);
 		goto err;
 	}
+#endif
 
 	/* Set defaults in case the user hasn't specified these */
 	if (!sql_host) {

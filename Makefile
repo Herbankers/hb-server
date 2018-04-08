@@ -4,11 +4,11 @@
 
 CC		:= gcc
 
-PKGLIST		= libssl mariadb
+PKGLIST		= mariadb libssl
 
 MAKEFLAGS	:= -s
 
-CFLAGS		:= -Wall -Wextra -Wpedantic -std=c99 -D_XOPEN_SOURCE=700 `pkg-config --cflags $(PKGLIST)` -g -O0 #-s -Os
+CFLAGS		:= -Wall -Wextra -Wpedantic -std=c99 -D_XOPEN_SOURCE=700 `pkg-config --cflags $(PKGLIST)` -g -O0 -DSSLSOCK #-s -Os
 LDFLAGS		:= -lpthread -lscrypt `pkg-config --libs $(PKGLIST)`
 
 kech-server-o	= \
