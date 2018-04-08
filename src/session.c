@@ -40,7 +40,7 @@
 #include "kbp.h"
 #include "kech.h"
 
-static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
+static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 		struct token *tok, struct kbp_reply *rep)
 {
 	struct kbp_request_transfer t;
@@ -49,7 +49,7 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 	/* Check if session hasn't timed out */
 	if (tok->valid) {
 		if (time(NULL) > tok->expiry_time) {
-			lprintf("%s: session timeout: %u,%u\n", addr,
+			lprintf("%s: session timeout: %u,%u\n", host,
 					tok->user_id, tok->card_id);
 
 			tok->valid = 0;
@@ -94,7 +94,7 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 			rep->status = KBP_S_FAIL;
 		} else {
 			if ((kbp_login_res) **buf == KBP_L_GRANTED)
-				lprintf("%s: session login: %u,%u\n", addr,
+				lprintf("%s: session login: %u,%u\n", host,
 						tok->user_id, tok->card_id);
 
 			rep->status = KBP_S_OK;
@@ -102,7 +102,7 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 		break;
 	case KBP_T_LOGOUT:
 		if (tok->valid)
-			lprintf("%s: session logout: %u,%u\n", addr,
+			lprintf("%s: session logout: %u,%u\n", host,
 					tok->user_id, tok->card_id);
 
 		tok->valid = 0;
@@ -131,7 +131,7 @@ static int process(MYSQL *sql, char **buf, char *addr, struct kbp_request *req,
 			rep->status = KBP_S_FAIL;
 		} else {
 			lprintf("%s: transfer from '%s' to '%s': EUR %.2f\n",
-					addr, t.iban_in, t.iban_out,
+					host, t.iban_in, t.iban_out,
 					(double) t.amount / 100);
 
 			rep->status = KBP_S_OK;
@@ -154,7 +154,7 @@ void *session(void *_conn)
 	struct kbp_request req;
 	struct kbp_reply rep;
 	struct token tok;
-	char *buf, addr[INET_ADDRSTRLEN];
+	char *buf, host[INET_ADDRSTRLEN];
 	int res, errcnt = 0;
 	MYSQL *sql = NULL;
 	SSL *ssl = NULL;
@@ -165,9 +165,9 @@ void *session(void *_conn)
 
 	/* Get client IP */
 	/* FIXME IPv6 */
-	inet_ntop(AF_INET, &conn->addr.sin_addr, addr,
+	inet_ntop(AF_INET, &conn->addr.sin_addr, host,
 			INET_ADDRSTRLEN);
-	printf("%s: new connection\n", addr);
+	printf("%s: new connection\n", host);
 	fflush(stdout);
 
 	/* Setup an SSL/TLS connection */
@@ -178,7 +178,7 @@ void *session(void *_conn)
 	SSL_set_fd(ssl, conn->sock);
 
 	if (SSL_accept(ssl) <= 0) {
-		lprintf("%s: SSL error\n", addr);
+		lprintf("%s: SSL error\n", host);
 		goto ret;
 	}
 
@@ -209,7 +209,7 @@ void *session(void *_conn)
 		/* Check if maximum error count hasn't been exceeded. */
 		if (errcnt > KBP_ERROR_MAX) {
 			lprintf("%s: maximum error count (%d) has been "
-					"exceeded\n", addr, KBP_ERROR_MAX);
+					"exceeded\n", host, KBP_ERROR_MAX);
 			break;
 		}
 
@@ -217,22 +217,22 @@ void *session(void *_conn)
 		if ((res = SSL_read(ssl, &req, sizeof(req))) <= 0) {
 			if (SSL_get_error(ssl, res) == SSL_ERROR_ZERO_RETURN)
 				break;
-			lprintf("%s: header read error\n", addr);
+			lprintf("%s: header read error\n", host);
 			errcnt++;
 			continue;
 		}
 		if (req.magic != KBP_MAGIC || req.length > KBP_LENGTH_MAX) {
-			lprintf("%s: invalid request\n", addr);
+			lprintf("%s: invalid request\n", host);
 			errcnt++;
 			continue;
 		}
 		if (req.version != KBP_VERSION) {
 			lprintf("%s: KBP version mismatch (got %u want %u)\n",
-					addr, req.version, KBP_VERSION);
+					host, req.version, KBP_VERSION);
 			break;
 		}
 
-		lprintf("%s: new request %u\n", addr, req.type);
+		lprintf("%s: new request %u\n", host, req.type);
 
 		/* Read request data if available */
 		if (req.length) {
@@ -242,7 +242,7 @@ void *session(void *_conn)
 			}
 
 			if (SSL_read(ssl, buf, req.length) <= 0) {
-				lprintf("%s: read error\n", addr);
+				lprintf("%s: read error\n", host);
 				errcnt++;
 				goto next;
 			}
@@ -251,27 +251,27 @@ void *session(void *_conn)
 		}
 
 		/* Process the request */
-		if (process(sql, &buf, addr, &req, &tok, &rep) < 0) {
-			lprintf("%s: error processing request\n", addr);
+		if (process(sql, &buf, host, &req, &tok, &rep) < 0) {
+			lprintf("%s: error processing request\n", host);
 			errcnt++;
 			goto next;
 		}
 
 		/* Send the header */
 		if (SSL_write(ssl, &rep, sizeof(struct kbp_reply)) <= 0) {
-			lprintf("%s: header write error\n", addr);
+			lprintf("%s: header write error\n", host);
 			errcnt++;
 			goto next;
 		}
 
 		/* Finally, send back the data */
 		if (rep.length && SSL_write(ssl, buf, rep.length) <= 0) {
-			lprintf("%s: write error: %d\n", addr, rep.length);
+			lprintf("%s: write error: %d\n", host, rep.length);
 			errcnt++;
 			goto next;
 		}
 
-		lprintf("%s: request %u has been processed: %d\n", addr,
+		lprintf("%s: request %u has been processed: %d\n", host,
 				req.type, rep.status);
 
 next:
@@ -279,7 +279,7 @@ next:
 	}
 
 ret:
-	printf("%s: terminating connection\n", addr);
+	printf("%s: terminating connection\n", host);
 	fflush(stdout);
 
 	/* Close the database connection */
