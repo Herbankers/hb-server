@@ -43,8 +43,8 @@
 #else
 #  include <errno.h>
 
-#  define READ(b, n)	read(conn->sock, (b), (n))
-#  define WRITE(b, n)	write(conn->sock, (b), (n))
+#  define READ(b, n)	read(conn.sock, (b), (n))
+#  define WRITE(b, n)	write(conn.sock, (b), (n))
 #endif
 
 #include "kbp.h"
@@ -160,7 +160,7 @@ static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 
 void *session(void *_conn)
 {
-	struct connection *conn = _conn;
+	struct connection conn;
 	struct kbp_request req;
 	struct kbp_reply rep;
 	struct token tok;
@@ -171,15 +171,17 @@ void *session(void *_conn)
 	SSL *ssl = NULL;
 #endif
 
+	memcpy(&conn, _conn, sizeof(struct connection));
+
 	rep.magic = KBP_MAGIC;
 	rep.version = KBP_VERSION;
 	memset(&tok, 0, sizeof(tok));
 
 	/* Get client IP */
 	/* FIXME IPv6 */
-	inet_ntop(AF_INET, &conn->addr.sin_addr, host,
+	inet_ntop(AF_INET, &conn.addr.sin_addr, host,
 			INET_ADDRSTRLEN);
-	printf("%s: new connection\n", host);
+	lprintf("%s: new connection\n", host);
 	fflush(stdout);
 
 #if SSLSOCK
@@ -188,7 +190,7 @@ void *session(void *_conn)
 		lprintf("unable to allocate SSL structure\n");
 		goto ret;
 	}
-	SSL_set_fd(ssl, conn->sock);
+	SSL_set_fd(ssl, conn.sock);
 
 	if (SSL_accept(ssl) <= 0) {
 		lprintf("%s: SSL error\n", host);
@@ -233,8 +235,9 @@ void *session(void *_conn)
 			if (SSL_get_error(ssl, res) == SSL_ERROR_ZERO_RETURN)
 				break;
 #else
-			/* FIXME Check if still connected */
-			break;
+			/* Is this right? */
+			if (!res)
+				break;
 #endif
 			lprintf("%s: header read error\n", host);
 			errcnt++;
@@ -298,19 +301,17 @@ next:
 	}
 
 ret:
-	printf("%s: terminating connection\n", host);
-	fflush(stdout);
+	lprintf("%s: terminating connection\n", host);
 
 	/* Close the database connection */
 	mysql_close(sql);
 	mysql_thread_end();
 
 	/* Close the client connection */
-	close(conn->sock);
+	close(conn.sock);
 #if SSLSOCK
 	SSL_free(ssl);
 #endif
-	free(_conn);
 
 	pthread_exit(NULL);
 }

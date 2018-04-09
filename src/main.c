@@ -173,7 +173,7 @@ err:
  */
 static int run(void)
 {
-	struct connection *conn;
+	struct connection conn;
 	struct sockaddr_in6 server;
 	pthread_t thread;
 	int sock, on = 1;
@@ -213,24 +213,16 @@ static int run(void)
 	/* Wait for clients */
 	socklen = sizeof(struct sockaddr_in);
 	for (;;) {
-		if (!(conn = malloc(sizeof(struct connection)))) {
-			fprintf(stderr, "unable to allocate connection "
-					"structure\n");
-			continue;
-		}
-
-		if ((conn->sock = accept(sock, (struct sockaddr *) &conn->addr,
+		if ((conn.sock = accept(sock, (struct sockaddr *) &conn.addr,
 						&socklen)) < 0) {
 			fprintf(stderr, "%s\n", strerror(errno));
-			free(conn);
 			continue;
 		}
 
 		/* Create a thread for new connections */
-		if (pthread_create(&thread, NULL, session, conn)) {
+		if (pthread_create(&thread, NULL, session, &conn)) {
 			fprintf(stderr, "unable to allocate thread\n");
-			close(conn->sock);
-			free(conn);
+			close(conn.sock);
 		}
 	}
 
