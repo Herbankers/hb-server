@@ -48,7 +48,7 @@
 #include "kech.h"
 #include "kbp.h"
 
-static uint16_t port = KBP_PORT;
+char port[6];
 #if SSLSOCK
 static char *ca, *cert, *key;
 #endif
@@ -194,7 +194,7 @@ static int run(void)
 	/* Bind the socket */
 	server.sin6_family = AF_INET6;
 	server.sin6_addr = in6addr_any;
-	server.sin6_port = htons(port);
+	server.sin6_port = htons(strtol(port, NULL, 10));
 
 	lprintf("binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
@@ -276,7 +276,7 @@ int main(int argc, char **argv)
 		switch (c) {
 		/* Port number */
 		case 'p':
-			port = strtol(optarg, NULL, 10);
+			strncpy(port, optarg, 6);
 			break;
 #if SSLSOCK
 		/* CA file path */
@@ -375,6 +375,9 @@ int main(int argc, char **argv)
 #endif
 
 	/* Set defaults in case the user hasn't specified these */
+	if (!port[0])
+		sprintf(port, "%d", KBP_PORT);
+
 	if (!sql_host) {
 		s = "localhost";
 		sql_host = malloc(strlen(s) + 1);
@@ -407,7 +410,7 @@ int main(int argc, char **argv)
 
 	lprintf("welcome to the Kech Bank server!\n");
 
-	lprintf("the server will be hosted on port %u\n", port);
+	lprintf("the server will be hosted on port %s\n", port);
 
 	if (init() < 0)
 		goto err;

@@ -1,6 +1,6 @@
 /*
  *
- * Kech Bank Protocol vers. 5
+ * Kech Bank Protocol vers. 6
  * kbp.h
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -37,7 +37,7 @@
 /* Kech server MAGIC number ("KECH") */
 #define KBP_MAGIC	0x4B454348
 /* Kech Bank Protocol version */
-#define KBP_VERSION	5
+#define KBP_VERSION	6
 /* Kech server default port */
 #define KBP_PORT	42069
 
@@ -187,7 +187,7 @@ struct kbp_request {
 	uint8_t		type;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
 	uint32_t	length;
-};
+} __attribute__((packed));
 
 /* Login request */
 struct kbp_request_login {
@@ -195,7 +195,7 @@ struct kbp_request_login {
 	char		uid[KBP_UID_MAX + 1];
 	/* PIN */
 	char		pin[KBP_PIN_MAX + 1];
-};
+} __attribute__((packed));
 
 /* Transfer request */
 struct kbp_request_transfer {
@@ -205,7 +205,7 @@ struct kbp_request_transfer {
 	char		iban_out[KBP_IBAN_MAX + 1];
 	/* Amount in EUR * 100 (2 decimal places) */
 	int64_t		amount;
-};
+} __attribute__((packed));
 
 
 /*
@@ -222,7 +222,7 @@ struct kbp_reply {
 	int8_t		status;
 	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
 	uint32_t	length;
-};
+} __attribute__((packed));
 
 /* Account reply */
 struct kbp_reply_account {
@@ -232,7 +232,7 @@ struct kbp_reply_account {
 	uint8_t		type;
 	/* Balance in EUR * 100 (2 decimal places) */
 	int64_t		balance;
-};
+} __attribute__((packed));
 
 /* Transaction reply */
 struct kbp_reply_transaction {
@@ -242,6 +242,6 @@ struct kbp_reply_transaction {
 	char		iban_out[KBP_IBAN_MAX + 1];
 	/* Amount in EUR * 100 (2 decimal places) */
 	int64_t		amount;
-};
+} __attribute__((packed));
 
 #endif

@@ -44,7 +44,10 @@ struct token {
 	time_t		expiry_time;
 };
 
+extern char port[6];
+#if SSLSOCK
 extern SSL_CTX *ctx;
+#endif
 extern char *sql_host, *sql_db, *sql_user, *sql_pass;
 extern uint16_t sql_port;
 
