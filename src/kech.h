@@ -36,11 +36,6 @@
 
 #include <netinet/in.h>
 
-struct connection {
-	int			sock;
-	struct sockaddr_in	addr;
-};
-
 /* Session token */
 struct token {
 	bool		valid;

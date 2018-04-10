@@ -173,14 +173,12 @@ err:
  */
 static int run(void)
 {
-	struct connection conn;
 	struct sockaddr_in6 server;
 	pthread_t thread;
-	int sock, on = 1;
-	socklen_t socklen;
+	int sock, csock, on = 1;
 
 	/* Create the socket */
-	if ((sock = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
+	if ((sock = socket(PF_INET6, SOCK_STREAM, 0)) < 0) {
 		fprintf(stderr, "unable to create socket: %s\n",
 				strerror(errno));
 		return -1;
@@ -211,18 +209,16 @@ static int run(void)
 	}
 
 	/* Wait for clients */
-	socklen = sizeof(struct sockaddr_in);
 	for (;;) {
-		if ((conn.sock = accept(sock, (struct sockaddr *) &conn.addr,
-						&socklen)) < 0) {
+		if ((csock = accept(sock, NULL, NULL)) < 0) {
 			fprintf(stderr, "%s\n", strerror(errno));
 			continue;
 		}
 
 		/* Create a thread for new connections */
-		if (pthread_create(&thread, NULL, session, &conn)) {
+		if (pthread_create(&thread, NULL, session, &csock)) {
 			fprintf(stderr, "unable to allocate thread\n");
-			close(conn.sock);
+			close(csock);
 		}
 	}
 

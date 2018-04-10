@@ -43,8 +43,8 @@
 #else
 #  include <errno.h>
 
-#  define READ(b, n)	read(conn.sock, (b), (n))
-#  define WRITE(b, n)	write(conn.sock, (b), (n))
+#  define READ(b, n)	read(sock, (b), (n))
+#  define WRITE(b, n)	write(sock, (b), (n))
 #endif
 
 #include "kbp.h"
@@ -158,29 +158,37 @@ static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 	return 1;
 }
 
-void *session(void *_conn)
+void *session(void *_sock)
 {
-	struct connection conn;
 	struct kbp_request req;
 	struct kbp_reply rep;
 	struct token tok;
+	struct sockaddr addr;
 	char *buf, host[INET_ADDRSTRLEN];
-	int res, errcnt = 0;
+	int res, errcnt = 0, sock, addrlen;
 	MYSQL *sql = NULL;
 #if SSLSOCK
 	SSL *ssl = NULL;
 #endif
 
-	memcpy(&conn, _conn, sizeof(struct connection));
+	sock = *((int *) _sock);
 
 	rep.magic = KBP_MAGIC;
 	rep.version = KBP_VERSION;
 	memset(&tok, 0, sizeof(tok));
 
 	/* Get client IP */
-	/* FIXME IPv6 */
-	inet_ntop(AF_INET, &conn.addr.sin_addr, host,
-			INET_ADDRSTRLEN);
+	addrlen = sizeof(addr);
+	getpeername(sock, &addr, &addrlen);
+
+	if (addr.sa_family == AF_INET)
+		inet_ntop(AF_INET,
+				&((struct sockaddr_in *) &addr)->sin_addr,
+				host, INET_ADDRSTRLEN);
+	else if (addr.sa_family == AF_INET6)
+		inet_ntop(AF_INET6,
+				&((struct sockaddr_in6 *) &addr)->sin6_addr,
+				host, INET_ADDRSTRLEN);
 	lprintf("%s: new connection\n", host);
 	fflush(stdout);
 
@@ -190,7 +198,7 @@ void *session(void *_conn)
 		lprintf("unable to allocate SSL structure\n");
 		goto ret;
 	}
-	SSL_set_fd(ssl, conn.sock);
+	SSL_set_fd(ssl, sock);
 
 	if (SSL_accept(ssl) <= 0) {
 		lprintf("%s: SSL error\n", host);
@@ -308,7 +316,7 @@ ret:
 	mysql_thread_end();
 
 	/* Close the client connection */
-	close(conn.sock);
+	close(sock);
 #if SSLSOCK
 	SSL_free(ssl);
 #endif
