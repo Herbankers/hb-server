@@ -162,12 +162,11 @@ static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 void *session(void *_sock)
 {
 	struct addrinfo *addr = NULL, hints;
-	struct in6_addr client;
 	struct kbp_request req;
 	struct kbp_reply rep;
 	struct token tok;
 	char *buf, host[INET6_ADDRSTRLEN];
-	int res, errcnt = 0, sock, addrlen;
+	int res, errcnt = 0, sock;
 	MYSQL *sql = NULL;
 #if SSLSOCK
 	SSL *ssl = NULL;
@@ -180,7 +179,6 @@ void *session(void *_sock)
 	memset(&tok, 0, sizeof(tok));
 
 	/* Get client IP */
-#if 1
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = AF_UNSPEC;
@@ -191,20 +189,16 @@ void *session(void *_sock)
 		lprintf("unable to resolve host %s\n", host);
 		goto ret;
 	}
-#else
-#endif
-	addrlen = sizeof(addr->ai_addr);
-	getpeername(sock, addr->ai_addr, &addrlen);
 
-	/* if (addr->ai_addr->sa_family == AF_INET) */
+	if (addr->ai_addr->sa_family == AF_INET)
 		inet_ntop(AF_INET,
 				&((struct sockaddr_in *) &addr->ai_addr)->sin_addr.s_addr,
-				host, INET6_ADDRSTRLEN);
-	/* else if (addr->ai_addr->sa_family == AF_INET6)
+				host, INET_ADDRSTRLEN);
+	else if (addr->ai_addr->sa_family == AF_INET6)
 		inet_ntop(AF_INET6,
-				&((struct sockaddr_in6 *) &addr->ai_addr)->sin6_addr,
-				host, INET6_ADDRSTRLEN); */
-	lprintf("%s: new connection\n", addr->ai_next->ai_addr);
+				&((struct sockaddr_in6 *) &addr->ai_addr)->sin6_addr.s6_addr,
+				host, INET6_ADDRSTRLEN);
+	lprintf("%s: new connection\n", host);
 
 #if SSLSOCK
 	/* Setup an SSL/TLS connection */
