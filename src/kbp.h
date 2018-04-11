@@ -1,6 +1,6 @@
 /*
  *
- * Kech Bank Protocol vers. 6
+ * Kech Bank Protocol vers. 7
  * kbp.h
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -37,7 +37,7 @@
 /* Kech server MAGIC number ("KECH") */
 #define KBP_MAGIC	0x4B454348
 /* Kech Bank Protocol version */
-#define KBP_VERSION	6
+#define KBP_VERSION	7
 /* Kech server default port */
 #define KBP_PORT	42069
 
@@ -192,7 +192,7 @@ struct kbp_request {
 /* Login request */
 struct kbp_request_login {
 	/* Card UID */
-	char		uid[KBP_UID_MAX + 1];
+	uint8_t		uid[KBP_UID_MAX];
 	/* PIN */
 	char		pin[KBP_PIN_MAX + 1];
 } __attribute__((packed));
