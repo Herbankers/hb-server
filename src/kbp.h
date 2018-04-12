@@ -1,6 +1,6 @@
 /*
  *
- * Kech Bank Protocol vers. 7
+ * Kech Bank Protocol vers. 8
  * kbp.h
  *
  * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
@@ -37,9 +37,9 @@
 /* Kech server MAGIC number ("KECH") */
 #define KBP_MAGIC	0x4B454348
 /* Kech Bank Protocol version */
-#define KBP_VERSION	7
+#define KBP_VERSION	8
 /* Kech server default port */
-#define KBP_PORT	42069
+#define KBP_PORT	8420
 
 
 /*
@@ -88,11 +88,7 @@ typedef enum {
 	KBP_L_BLOCKED
 } kbp_login_res;
 
-
-/*
- * Request types
- */
-
+/* Requests */
 typedef enum {
 	/*
 	 * Request an array of accounts associated with user belonging to the
@@ -156,11 +152,7 @@ typedef enum {
 	KBP_T_TRANSFER
 } kbp_request_t;
 
-
-/*
- * Reply status
- */
-
+/* Reply status */
 typedef enum {
 	/* Session has timed out */
 	KBP_S_TIMEOUT = -2,
