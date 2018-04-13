@@ -45,7 +45,7 @@ static int ownsaccount(MYSQL *sql, struct token *tok, const char *iban)
 			"`user_id` = %u";
 	if (!(q = malloc(snprintf(NULL, 0, _q, iban, tok->user_id) + 1)))
 		goto err;
-	sprintf(q, _q, iban, iban, tok->user_id);
+	sprintf(q, _q, iban, tok->user_id);
 
 	/* Run it */
 	if (mysql_query(sql, q))
