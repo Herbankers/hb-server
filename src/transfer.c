@@ -132,31 +132,31 @@ int transfer(MYSQL *sql, struct token *tok, char **buf)
 		return -1;
 
 	/* Check if the IBAN(s) are valid and exist in the database */
-	if (*t.iban_in) {
-		if (!iban_validate(t.iban_in))
+	if (*t.iban_src) {
+		if (!iban_validate(t.iban_src))
 			return -1;
-		if (modify(sql, t.iban_in, 0) < 0)
+		if (modify(sql, t.iban_src, 0) < 0)
 			return -1;
 	}
 
-	if (*t.iban_out) {
-		if (!iban_validate(t.iban_out))
+	if (*t.iban_dest) {
+		if (!iban_validate(t.iban_dest))
 			return -1;
-		if (modify(sql, t.iban_out, 0) < 0)
+		if (modify(sql, t.iban_dest, 0) < 0)
 			return -1;
 	}
 
 	/* Check if one of the accounts is accessible with the active session */
-	if (ownsaccount(sql, tok, (*t.iban_in) ? t.iban_in : t.iban_out) <= 0)
+	if (ownsaccount(sql, tok, (*t.iban_src) ? t.iban_src : t.iban_dest) <= 0)
 		return -1;
 
 	/* Perform the transaction */
-	if (*t.iban_in)
-		if (modify(sql, t.iban_in, -t.amount) < 0)
+	if (*t.iban_src)
+		if (modify(sql, t.iban_src, -t.amount) < 0)
 			return -1;
-	if (*t.iban_out)
-		if (modify(sql, t.iban_out, t.amount) < 0)
-			if (*t.iban_in && modify(sql, t.iban_in, t.amount) < 0)
+	if (*t.iban_dest)
+		if (modify(sql, t.iban_dest, t.amount) < 0)
+			if (*t.iban_src && modify(sql, t.iban_src, t.amount) < 0)
 				return -1;
 
 	return 0;

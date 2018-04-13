@@ -142,7 +142,7 @@ static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 			rep->status = KBP_S_FAIL;
 		} else {
 			lprintf("%s: transfer from '%s' to '%s': EUR %.2f\n",
-					host, t.iban_in, t.iban_out,
+					host, t.iban_src, t.iban_dest,
 					(double) t.amount / 100);
 
 			rep->status = KBP_S_OK;

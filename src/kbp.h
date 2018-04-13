@@ -141,9 +141,9 @@ typedef enum {
 	 */
 	KBP_T_TRANSACTIONS,
 	/*
-	 * Transfer from iban_in to iban_out, the iban_in must belong to the
-	 * user associated with the active session. An empty iban_in signifies a
-	 * deposit. Likewise, an empty iban_out signifies a withdrawal.
+	 * Transfer from iban_src to iban_dest, the iban_src must belong to the
+	 * user associated with the active session. An empty iban_src signifies
+	 * a deposit. Likewise, an empty iban_dest signifies a withdrawal.
 	 *
 	 * Needs: active session
 	 * Requests: struct kbp_request_transfer
@@ -192,9 +192,9 @@ struct kbp_request_login {
 /* Transfer request */
 struct kbp_request_transfer {
 	/* Source IBAN (must be accessible with the active session) */
-	char		iban_in[KBP_IBAN_MAX + 1];
+	char		iban_src[KBP_IBAN_MAX + 1];
 	/* Destination IBAN */
-	char		iban_out[KBP_IBAN_MAX + 1];
+	char		iban_dest[KBP_IBAN_MAX + 1];
 	/* Amount in EUR * 100 (2 decimal places) */
 	int64_t		amount;
 } __attribute__((packed));
@@ -229,9 +229,9 @@ struct kbp_reply_account {
 /* Transaction reply */
 struct kbp_reply_transaction {
 	/* Source IBAN */
-	char		iban_in[KBP_IBAN_MAX + 1];
+	char		iban_src[KBP_IBAN_MAX + 1];
 	/* Destination IBAN */
-	char		iban_out[KBP_IBAN_MAX + 1];
+	char		iban_dest[KBP_IBAN_MAX + 1];
 	/* Amount in EUR * 100 (2 decimal places) */
 	int64_t		amount;
 } __attribute__((packed));
