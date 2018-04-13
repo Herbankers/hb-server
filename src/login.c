@@ -79,7 +79,8 @@ int login(MYSQL *sql, struct token *tok, char **buf)
 
 	/* Prepare the query */
 	_q = "SELECT `user_id`, `card_id`, `pin`, `attempts` FROM `cards` "
-			"WHERE SUBSTRING(HEX(`id`), 1, 10) = %x%x%x%x%x%x";
+			"WHERE SUBSTRING(HEX(`id`), 1, 12) = "
+			"'%02x%02x%02x%02x%02x%02x'";
 	if (!(q = malloc(snprintf(NULL, 0, _q, l.uid[5], l.uid[4], l.uid[3],
 			l.uid[2], l.uid[1], l.uid[0]) + 1)))
 		goto err;
