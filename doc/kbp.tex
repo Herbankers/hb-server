@@ -22,7 +22,7 @@
 \usepackage[cal=boondoxo]{mathalfa}
 
 \newcommand{\TITLE}{Kech Bank Protocol}
-\newcommand{\SUBTITLE}{Versie 4}
+\newcommand{\SUBTITLE}{Versie 8}
 \newcommand{\AUTHOR}{Bastiaan Teeuwen}
 \newcommand{\INSTITUTE}{Hogeschool Rotterdam}
 \newcommand{\DATE}{\today}
@@ -68,8 +68,7 @@ zijn allemaal verplicht. Hierdoor kunnen ongeregistreerde ATM's niet zomaar
 verbinding maken met de server en vice versa is het niet mogelijk een server te
 spoofen.
 
-De poort die gebruikt wordt is bij voorkeur TCP poort 42069
-(\texttt{KBP\_PORT}).
+De poort die gebruikt wordt is bij voorkeur TCP poort 8420 (\texttt{KBP\_PORT}).
 
 
 \section{Request header}
@@ -245,9 +244,9 @@ Deze request heeft de volgende request data nodig:
 \begin{center}
 \begin{bytefield}{32}
 	\bitheader{0, 23, 24, 31} \\
-	\wordbox[lrt]{1}{Card UID 00:55} \\
-	\bitbox[lrb]{24}{} & \bitbox[lrt]{8}{} \\
-	\wordbox[lr]{1}{PIN 56:159} \\
+	\wordbox[lrt]{1}{Card UID 00:47} \\
+	\bitbox[lrb]{16}{} & \bitbox[lrt]{16}{} \\
+	\wordbox[lr]{1}{PIN 48:151} \\
 	\skippedwords \\
 	\wordbox[lrb]{1}{}
 \end{bytefield}
@@ -365,7 +364,10 @@ rekening moet wijzen die toegankelijk is door de gebruiker geassocieerd met de
 actieve sessie.
 
 Indien \texttt{Destination IBAN} leeg is (alleen een null terminator bevat), zal
-een geldopname plaatsvinden.
+een geldopname plaatsvinden. Het is niet mogelijk geld op te nemen van de
+rekening van een andere gebruiker \texttt{Source IBAN} moet daarom wel verwijzen
+naar een rekening toegankelijk door de gebruiker geassocieerd met de actieve
+sessie.
 
 Indien \texttt{Amount} minder of gelijk is aan 0, zal \texttt{KBP\_S\_FAIL}
 worden teruggestuurd.
