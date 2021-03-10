@@ -32,8 +32,6 @@
 
 #include <libscrypt.h>
 
-#include <mysql/mysql.h>
-
 #include "kbp.h"
 #include "kech.h"
 

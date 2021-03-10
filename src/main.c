@@ -36,8 +36,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <mysql/mysql.h>
-
 #if SSLSOCK
 #  include <openssl/err.h>
 #  include <openssl/ssl.h>

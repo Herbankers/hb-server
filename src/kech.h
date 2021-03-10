@@ -33,8 +33,9 @@
 #include <time.h>
 
 #include <openssl/ssl.h>
-
 #include <netinet/in.h>
+
+#include <mysql.h>
 
 /* Session token */
 struct token {
