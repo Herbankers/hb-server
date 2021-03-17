@@ -18,9 +18,13 @@ set(CMAKE_VERBOSE_MAKEFILE TRUE)
 # OpenSSL
 find_package(OpenSSL REQUIRED)
 
-# MariaDB
-find_package(PkgConfig)
-pkg_check_modules(MARIADB REQUIRED mariadb)
+# cJSON
+find_package(cJSON REQUIRED)
+
+# pkgconfig packages
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(ARGON2 REQUIRED libargon2)
+pkg_check_modules(MARIADB REQUIRED libmariadb)
 
 set(HEADERS
 	src/kbp.h
@@ -43,7 +47,20 @@ add_executable(${PROJECT_NAME}
 	${SOURCES}
 )
 
-link_directories(${MARIADB_LIBRARY_DIRS})
-target_include_directories(${PROJECT_NAME} PRIVATE ${MARIADB_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${MARIADB_LIBRARIES})
-#target_include_directories(${PROJECT_NAME} PRIVATE include)
+target_link_libraries(${PROJECT_NAME}
+	${ARGON2_LINK_LIBRARIES}
+	${MARIADB_LINK_LIBRARIES}
+	# I don't understand why the below doesn't work but oh well
+	#${ARGON2_LIBRARIES}
+	#${MARIADB_LIBRARIES}
+)
+target_include_directories(${PROJECT_NAME} PUBLIC
+	${ARGON2_INCLUDE_DIRS}
+	${CJSON_INCLUDE_DIR}
+	${MARIADB_INCLUDE_DIRS}
+	${OPENSSL_INCLUDE_DIR}
+)
+target_compile_options(${PROJECT_NAME} PUBLIC
+	${ARGON2_CFLAGS_OTHER}
+	${MARIADB_CFLAGS_OTHER}
+)

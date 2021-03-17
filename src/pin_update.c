@@ -3,7 +3,7 @@
  * kech-server
  * pin_update.c
  *
- * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+ * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -30,7 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <libscrypt.h>
+#include <argon2.h>
 
 #include "kbp.h"
 #include "kech.h"
@@ -38,7 +38,8 @@
 int pin_update(MYSQL *sql, struct token *tok, char **buf)
 {
 	char pin[KBP_PIN_MAX + 1];
-	char mcf[SCRYPT_MCF_LEN + 1];
+	char salt[ARGON2_SALT_LEN];
+	char encoded[ARGON2_ENC_LEN];
 	char *_q, *q = NULL;
 	unsigned int i;
 
@@ -49,23 +50,22 @@ int pin_update(MYSQL *sql, struct token *tok, char **buf)
 	if (strlen(pin) < KBP_PIN_MIN)
 		goto err;
 
-	/* Check if PIN only contains numeric characters */
+	/* check that PIN only contains numeric characters */
 	for (i = 0; i < strlen(pin); i++)
 		if (!isdigit(pin[i]))
 			goto err;
 
-	if (!libscrypt_hash(mcf, pin, SCRYPT_N, SCRYPT_r, SCRYPT_p))
+	/* hash and salt using argon2 */
+	if (argon2i_hash_encoded(ARGON2_PASS, ARGON2_MEMORY, ARGON2_PARALLEL, pin, KBP_PIN_MAX, salt, ARGON2_SALT_LEN,
+			ARGON2_HASH_LEN, encoded, ARGON2_ENC_LEN) != ARGON2_OK)
 		goto err;
 
-	/* Prepare the query */
+	/* store the hash + salt in the database */
 	_q = "UPDATE `cards` SET `pin` = '%s' WHERE "
 			"`user_id` = %u AND `card_id` = %u";
-	if (!(q = malloc(snprintf(NULL, 0, _q, mcf,
-			tok->user_id, tok->card_id) + 1)))
+	if (!(q = malloc(snprintf(NULL, 0, _q, encoded, tok->user_id, tok->card_id) + 1)))
 		goto err;
-	sprintf(q, _q, mcf, tok->user_id, tok->card_id);
-
-	/* Run it */
+	sprintf(q, _q, encoded, tok->user_id, tok->card_id);
 	if (mysql_query(sql, q))
 		goto err;
 

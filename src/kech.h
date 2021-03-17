@@ -45,6 +45,14 @@ struct token {
 	time_t		expiry_time;
 };
 
+/* argon2 hashing parameters */
+#define ARGON2_PASS	2	/* 2 passes */
+#define ARGON2_MEMORY	65536	/* 64 Mb memory usage limit */
+#define ARGON2_PARALLEL	1	/* number of threads */
+#define ARGON2_SALT_LEN 16	/* length of the salt in bytes */
+#define ARGON2_HASH_LEN 32	/* length of the output hash in bytes */
+#define ARGON2_ENC_LEN	108	/* length of the output encoded string (hash + salt + params) in bytes */
+
 extern char port[6];
 #if SSLSOCK
 extern SSL_CTX *ctx;

@@ -3,7 +3,7 @@
  * kech-server
  * login.c
  *
- * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+ * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <libscrypt.h>
+#include <argon2.h>
 
 #include "kbp.h"
 #include "kech.h"
@@ -75,45 +75,37 @@ int login(MYSQL *sql, struct token *tok, char **buf)
 	free(*buf);
 	*buf = NULL;
 
-	/* Prepare the query */
+	/* extract card information from the database into memory */
 	_q = "SELECT `user_id`, `card_id`, `pin`, `attempts` FROM `cards` "
-			"WHERE SUBSTRING(HEX(`id`), 1, 12) = "
-			"'%02x%02x%02x%02x%02x%02x'";
-	if (!(q = malloc(snprintf(NULL, 0, _q, l.uid[5], l.uid[4], l.uid[3],
-			l.uid[2], l.uid[1], l.uid[0]) + 1)))
+			"WHERE SUBSTRING(HEX(`id`), 1, 12) = '%02x%02x%02x%02x%02x%02x'";
+	if (!(q = malloc(snprintf(NULL, 0, _q, l.uid[5], l.uid[4], l.uid[3], l.uid[2], l.uid[1], l.uid[0]) + 1)))
 		goto err;
-	sprintf(q, _q, l.uid[5], l.uid[4], l.uid[3], l.uid[2], l.uid[1],
-			l.uid[0]);
+	sprintf(q, _q, l.uid[5], l.uid[4], l.uid[3], l.uid[2], l.uid[1], l.uid[0]);
 
-	/* Run it */
 	if (mysql_query(sql, q))
 		goto err;
 	if (!(res = mysql_store_result(sql)))
 		goto err;
 
-	/* Check if entry exists */
+	/* check if entry exists */
 	if (!(row = mysql_fetch_row(res)))
 		goto err;
 
-	/* Allocate reply */
+	/* allocate memory for the reply structure */
 	if (!(lres = malloc(1)))
 		goto err;
 	*buf = (char *) lres;
 
-	/* Check if card is blocked */
+	/* check if the card is blocked */
 	if (strtol(row[3], NULL, 10) >= KBP_PINTRY_MAX) {
 		*lres = KBP_L_BLOCKED;
 	} else {
 		user_id = strtol(row[0], NULL, 10);
 		card_id = strtol(row[1], NULL, 10);
 
-		/* Check if the entered password is correct */
-		if (libscrypt_check(row[2], l.pin) <= 0) {
-			if (!attempts_update(sql, user_id, card_id, 0))
-				goto err;
-			*lres = KBP_L_DENIED;
-		} else {
-			/* Reset the blocked flag */
+		/* check if the entered PIN is correct */
+		if (argon2i_verify(row[2], l.pin, strlen(KBP_PIN_MAX)) == ARGON2_OK) {
+			/* reset the blocked flag */
 			if (!attempts_update(sql, user_id, card_id, 1))
 				goto err;
 
@@ -123,6 +115,11 @@ int login(MYSQL *sql, struct token *tok, char **buf)
 			tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
 
 			*lres = KBP_L_GRANTED;
+		} else {
+			/* login failed, increment failed login attempts */
+			if (!attempts_update(sql, user_id, card_id, 0))
+				goto err;
+			*lres = KBP_L_DENIED;
 		}
 	}
 

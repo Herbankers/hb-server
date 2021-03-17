@@ -3,7 +3,7 @@
  * kech-server
  * main.c
  *
- * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+ * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -62,7 +62,7 @@ SSL_CTX *ctx;
 char *sql_host, *sql_db, *sql_user, *sql_pass;
 uint16_t sql_port;
 
-/* Logging function */
+/* logging print function */
 void lprintf(const char *msg, ...)
 {
 	FILE *file = NULL;
@@ -101,11 +101,11 @@ static int init(void)
 	const SSL_METHOD *met;
 #endif
 
-	/* Intialize MySQL */
+	/* intialize MySQL */
 	mysql_library_init(0, 0, NULL);
 
 #if SSLSOCK
-	/* Initialize OpenSSL */
+	/* initialize OpenSSL */
 	lprintf("initializing OpenSSL...\n");
 	SSL_library_init();
 	SSL_load_error_strings();
@@ -115,7 +115,7 @@ static int init(void)
 	if (!(ctx = SSL_CTX_new(met)))
 		goto err;
 
-	/* Load CA */
+	/* load CA */
 	if (access(ca, F_OK) < 0) {
 		fprintf(stderr, "%s: %s\n", ca, strerror(errno));
 		goto err;
@@ -126,7 +126,7 @@ static int init(void)
 		goto err;
 	}
 
-	/* Load certificate and private key files */
+	/* load certificate and private key files */
 	if (access(cert, F_OK) < 0) {
 		fprintf(stderr, "%s: %s\n", cert, strerror(errno));
 		goto err;
@@ -146,7 +146,7 @@ static int init(void)
 	if (!SSL_CTX_check_private_key(ctx))
 		goto err;
 
-	/* Require client verification */
+	/* require client verification */
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 	SSL_CTX_set_verify_depth(ctx, 1);
 
@@ -175,14 +175,14 @@ static int run(void)
 	pthread_t thread;
 	int sock, csock, on = 1;
 
-	/* Create the socket */
+	/* create the socket */
 	if ((sock = socket(PF_INET6, SOCK_STREAM, 0)) < 0) {
 		fprintf(stderr, "unable to create socket: %s\n",
 				strerror(errno));
 		return -1;
 	}
 
-	/* Allow socket to be reused */
+	/* allow socket to be reused */
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
 			sizeof(on)) < 0) {
 		fprintf(stderr, "%s\n", strerror(errno));
@@ -206,14 +206,14 @@ static int run(void)
 		return -1;
 	}
 
-	/* Wait for clients */
+	/* wait for clients */
 	for (;;) {
 		if ((csock = accept(sock, NULL, NULL)) < 0) {
 			fprintf(stderr, "%s\n", strerror(errno));
 			continue;
 		}
 
-		/* Create a thread for new connections */
+		/* create a thread for new connections */
 		if (pthread_create(&thread, NULL, session, &csock)) {
 			fprintf(stderr, "unable to allocate thread\n");
 			close(csock);
@@ -270,7 +270,7 @@ int main(int argc, char **argv)
 #if SSLSOCK
 			"C:c:k:"
 #endif
-			"I:P:d:u:a:l:hv")) != -1) {
+			"i:P:d:u:a:l:hv")) != -1) {
 		switch (c) {
 		/* Port number */
 		case 'p':
@@ -297,7 +297,7 @@ int main(int argc, char **argv)
 			break;
 #endif
 		/* MySQL database host */
-		case 'I':
+		case 'i':
 			if (!(sql_host = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(sql_host, optarg);
@@ -406,8 +406,7 @@ int main(int argc, char **argv)
 		strcpy(log_path, s);
 	}
 
-	lprintf("welcome to the Kech Bank server!\n");
-
+	lprintf("starting the Herbank server...\n");
 	lprintf("the server will be hosted on port %s\n", port);
 
 	if (init() < 0)
