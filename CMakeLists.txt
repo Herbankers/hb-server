@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16.0)
 
-project(kech-server VERSION 2.0.0 LANGUAGES C)
+project(hb-server VERSION 2.0.0 LANGUAGES C)
 
 # Options
 option(DEBUG "Build with debugging messages and tools" ON)
@@ -12,8 +12,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
-
-set(CMAKE_VERBOSE_MAKEFILE TRUE)
 
 # OpenSSL
 find_package(OpenSSL REQUIRED)

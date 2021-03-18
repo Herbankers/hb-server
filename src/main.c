@@ -72,13 +72,13 @@ void lprintf(const char *msg, ...)
 
 	pthread_mutex_lock(&log_lock);
 
-	if ((file = fopen(log_path, "a"))) {
+	/* write the log entry to a file if one has been specified */
+	if (log_path && (file = fopen(log_path, "a"))) {
 		t = time(NULL);
 		tm = localtime(&t);
 
 		va_start(args, msg);
-		fprintf(file, "[%04d-%02d-%02d %02d:%02d:%02d] ",
-				1900 + tm->tm_year, tm->tm_mon, tm->tm_mday,
+		fprintf(file, "[%04d-%02d-%02d %02d:%02d:%02d] ", 1900 + tm->tm_year, tm->tm_mon, tm->tm_mday,
 				tm->tm_hour, tm->tm_min, tm->tm_sec);
 		vfprintf(file, msg, args);
 		va_end(args);
@@ -95,18 +95,13 @@ void lprintf(const char *msg, ...)
 	pthread_mutex_unlock(&log_lock);
 }
 
-static int init(void)
+#if SSLSOCK
+static int ssl_initialize(void)
 {
-#if SSLSOCK
 	const SSL_METHOD *met;
-#endif
 
-	/* intialize MySQL */
-	mysql_library_init(0, 0, NULL);
-
-#if SSLSOCK
 	/* initialize OpenSSL */
-	lprintf("initializing OpenSSL...\n");
+	lprintf(" initializing OpenSSL...\n");
 	SSL_library_init();
 	SSL_load_error_strings();
 
@@ -160,14 +155,14 @@ err:
 		SSL_CTX_free(ctx);
 
 	return -1;
-#else
-	return 0;
-#endif
 }
+#endif
 
 /*
  * TODO Handle SIGNALS for server termination, like waiting for clients to
  * terminate
+ *
+ * e.g. send all clients a that their session has terminated (HBP_TERM_SERVDOWN)
  */
 static int run(void)
 {
@@ -175,45 +170,62 @@ static int run(void)
 	pthread_t thread;
 	int sock, csock, on = 1;
 
+	/* intialize MySQL */
+	mysql_library_init(0, 0, NULL);
+
+	if (!(sql = mysql_init(NULL))) {
+		lprintf("mysql internal error\n");
+		return -1;
+	}
+
+	/* test our MySQL username, password and if the database exists */
+	if (!mysql_real_connect(sql, sql_host, sql_user, sql_pass, sql_db, sql_port, NULL, 0)) {
+		lprintf("database connection error\n");
+		return -1;
+	}
+
+#if SSLSOCK
+	if (ssl_initialize() < 0)
+		return -1;
+#endif
+
 	/* create the socket */
 	if ((sock = socket(PF_INET6, SOCK_STREAM, 0)) < 0) {
-		fprintf(stderr, "unable to create socket: %s\n",
-				strerror(errno));
+		fprintf(stderr, "unable to create socket: %s\n", strerror(errno));
 		return -1;
 	}
 
 	/* allow socket to be reused */
-	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
-			sizeof(on)) < 0) {
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) < 0) {
 		fprintf(stderr, "%s\n", strerror(errno));
 		return -1;
 	}
 
-	/* Bind the socket */
+	/* bind the socket */
 	server.sin6_family = AF_INET6;
 	server.sin6_addr = in6addr_any;
 	server.sin6_port = htons(strtol(port, NULL, 10));
 
-	lprintf("binding socket...\n");
+	lprintf(" Binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
 		fprintf(stderr, "unable to bind socket: %s\n", strerror(errno));
 		return -1;
 	}
 
-	printf("waiting for connections...\n");
+	lprintf(" Listening for connections...\n");
 	if (listen(sock, SOMAXCONN) < 0) {
 		fprintf(stderr, "%s\n", strerror(errno));
 		return -1;
 	}
 
-	/* wait for clients */
+	/* listen for clients */
 	for (;;) {
 		if ((csock = accept(sock, NULL, NULL)) < 0) {
 			fprintf(stderr, "%s\n", strerror(errno));
 			continue;
 		}
 
-		/* create a thread for new connections */
+		/* create a thread for every new connection */
 		if (pthread_create(&thread, NULL, session, &csock)) {
 			fprintf(stderr, "unable to allocate thread\n");
 			close(csock);
@@ -226,30 +238,30 @@ static int run(void)
 static void usage(char *prog)
 {
 	printf("Usage: %s [OPTION...]\n\n%s", prog,
-			"  -p PORT NUMBER       port number to bind socket to\n"
+			"  -P PORT NUMBER       port number to bind socket to\n"
 #if SSLSOCK
-			"  -C FILE              CA file to use\n"
+			"  -r FILE              CA file to use\n"
 			"  -c FILE              certificate file to use\n"
 			"  -k FILE              private key file to use\n"
 #endif
-			"  -i IP ADDRESS        MySQL database host\n"
-			"  -P PORT NUMBER       MySQL database port\n"
+			"  -i HOST:PORT         MySQL server host (default is localhost)\n"
 			"  -d DB                MySQL database name\n"
-			"  -u USER              MySQL database username\n"
-			"  -a PASSWORD          MySQL database password\n"
-			"  -l FILE              log file to use\n"
+			"  -u USER              MySQL server username\n"
+			"  -p PASSWORD          MySQL server password\n"
+			"  -o FILE              file to output log to\n"
 			"  -h                   show this help message\n"
 			"  -v                   show verbose status messages\n"
 			);
 }
 
-static void fini(void)
+static void finalize(void)
 {
 	mysql_library_end();
 
 #if SSLSOCK
 	SSL_CTX_free(ctx);
 
+	free(ca);
 	free(cert);
 	free(key);
 #endif
@@ -265,15 +277,15 @@ int main(int argc, char **argv)
 	char *s;
 	int c;
 
-	/* Parse arguments */
-	while ((c = getopt(argc, argv, "p:"
+	/* parse command-line arguments */
+	while ((c = getopt(argc, argv, "P:"
 #if SSLSOCK
 			"C:c:k:"
 #endif
-			"i:P:d:u:a:l:hv")) != -1) {
+			"i:d:u:p:o:hv")) != -1) {
 		switch (c) {
-		/* Port number */
-		case 'p':
+		/* port number */
+		case 'P':
 			strncpy(port, optarg, 6);
 			break;
 #if SSLSOCK
@@ -283,69 +295,63 @@ int main(int argc, char **argv)
 				goto err;
 			strcpy(ca, optarg);
 			break;
-		/* Certificate file path */
+		/* certificate file path */
 		case 'c':
 			if (!(cert = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(cert, optarg);
 			break;
-		/* Key file path */
+		/* key file path */
 		case 'k':
 			if (!(key = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(key, optarg);
 			break;
 #endif
-		/* MySQL database host */
+		/* MySQL server host */
 		case 'i':
-			if (!(sql_host = malloc(strlen(optarg) + 1)))
+			/* separate host from port */
+			s = strtok(optarg, ":");
+
+			if (!(sql_host = malloc(strlen(s) + 1)))
 				goto err;
-			strcpy(sql_host, optarg);
+			strcpy(sql_host, s);
+
+			s = strtok(NULL, ":");
+			sql_port = strtol(s, NULL, 10);
+
 			break;
-		/* MySQL database port */
-		case 'P':
-			sql_port = strtol(optarg, NULL, 10);
-			break;
-		/* MySQL database database name */
+		/* MySQL database name */
 		case 'd':
 			if (!(sql_db = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(sql_db, optarg);
 			break;
-		/* MySQL database username */
+		/* MySQL server username */
 		case 'u':
 			if (!(sql_user = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(sql_user, optarg);
 			break;
-		/* MySQL database password */
-		case 'a':
+		/* MySQL server password */
+		case 'p':
 			if (!(sql_pass = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(sql_pass, optarg);
 			break;
-		/* Log file path */
-		case 'l':
+		/* log file path */
+		case 'o':
 			if (!(log_path = malloc(strlen(optarg) + 1)))
 				goto err;
 			strcpy(log_path, optarg);
 			break;
-		/* Usage */
+		/* show usage */
 		case 'h':
 			usage(argv[0]);
 
-#if SSLSOCK
-			free(ca);
-			free(cert);
-			free(key);
-#endif
-			free(sql_host);
-			free(sql_db);
-			free(sql_user);
-			free(sql_pass);
-
+			finalize();
 			return 0;
-		/* Verbose */
+		/* verbose logging */
 		case 'v':
 			verbose = 1;
 			break;
@@ -358,21 +364,21 @@ int main(int argc, char **argv)
 
 #if SSLSOCK
 	if (!ca) {
-		fprintf(stderr, "please specify a CA file\n");
+		fprintf(stderr, "hb-server: please specify a CA file\n");
 		usage(argv[0]);
 		goto err;
 	} else if (!cert) {
-		fprintf(stderr, "please specify a certificate file\n");
+		fprintf(stderr, "hb-server: please specify a certificate file\n");
 		usage(argv[0]);
 		goto err;
 	} else if (!key) {
-		fprintf(stderr, "please specify a private key file\n");
+		fprintf(stderr, "hb-server: please specify a private key file\n");
 		usage(argv[0]);
 		goto err;
 	}
 #endif
 
-	/* Set defaults in case the user hasn't specified these */
+	/* set defaults in case the user hasn't specified these */
 	if (!port[0])
 		sprintf(port, "%d", KBP_PORT);
 
@@ -400,25 +406,17 @@ int main(int argc, char **argv)
 		strcpy(sql_pass, s);
 	}
 
-	if (!log_path) {
-		s = "kech.log";
-		log_path = malloc(strlen(s) + 1);
-		strcpy(log_path, s);
-	}
-
-	lprintf("starting the Herbank server...\n");
-	lprintf("the server will be hosted on port %s\n", port);
-
-	if (init() < 0)
-		goto err;
+	/* the exciting part, get everything started up */
+	lprintf("Copyright (C) 2021 Herbank Server v1.0\n");
+	lprintf("The server will be hosted on port %s\n", port);
 
 	if (run() < 0)
 		goto err;
 
-	fini();
+	finalize();
 	return 0;
 
 err:
-	fini();
+	finalize();
 	return 1;
 }

@@ -3,7 +3,7 @@
  * kech-server
  * session.c
  *
- * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+ * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
