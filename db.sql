@@ -4,8 +4,8 @@
 -- See https://mariadb.com/kb/en/library/setting-character-sets-and-collations/#example-changing-the-default-character-set-to-utf-8 for more info
 --
 
-CREATE DATABASE IF NOT EXISTS `herbanker`;
-USE herbanker;
+CREATE DATABASE IF NOT EXISTS `herbankdb`;
+USE herbankdb;
 
 CREATE TABLE IF NOT EXISTS `users` (
 	`id`		INTEGER UNSIGNED	NOT NULL UNIQUE AUTO_INCREMENT,
