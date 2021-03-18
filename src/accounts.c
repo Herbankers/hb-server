@@ -1,9 +1,8 @@
 /*
  *
- * kech-server
- * accounts.c
+ * hb-server
  *
- * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+ * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,8 +30,8 @@
 
 #include <mysql.h>
 
-#include "kbp.h"
-#include "kech.h"
+#include "hbp.h"
+#include "herbank.h"
 
 int accounts_get(MYSQL *sql, struct token *tok, char **buf)
 {

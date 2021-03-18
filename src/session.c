@@ -1,7 +1,6 @@
 /*
  *
- * kech-server
- * session.c
+ * hb-server
  *
  * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
@@ -46,8 +45,8 @@
 #  define WRITE(b, n)	write(sock, (b), (n))
 #endif
 
-#include "kbp.h"
-#include "kech.h"
+#include "hbp.h"
+#include "herbank.h"
 
 static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 		struct token *tok, struct kbp_reply *rep)

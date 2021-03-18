@@ -1,9 +1,8 @@
 /*
  *
- * kech-server
- * iban.c
+ * hb-server
  *
- * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+ * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "kbp.h"
+#include "hbp.h"
 
 static const uint8_t prefix_fmt = 0xCF /* 0b11001111 */;
 

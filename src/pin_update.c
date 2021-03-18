@@ -1,7 +1,6 @@
 /*
  *
- * kech-server
- * pin_update.c
+ * hb-server
  *
  * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
@@ -32,8 +31,8 @@
 
 #include <argon2.h>
 
-#include "kbp.h"
-#include "kech.h"
+#include "hbp.h"
+#include "herbank.h"
 
 int pin_update(MYSQL *sql, struct token *tok, char **buf)
 {

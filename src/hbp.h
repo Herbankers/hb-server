@@ -2,7 +2,6 @@
 /*
  *
  * HerBank Protocol v1
- * kbp.h
  *
  * Copyright (C) 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
@@ -73,9 +72,9 @@
 /* Account types */
 typedef enum {
 	/* Checkings account */
-	KBP_A_CHECKING,
+	HBP_A_CHECKING,
 	/* Savings account */
-	KBP_A_SAVINGS
+	HBP_A_SAVINGS
 } kbp_account_t;
 
 /* Login results */
@@ -90,23 +89,6 @@ typedef enum {
 
 /* Requests */
 typedef enum {
-	/*
-	 * Request an array of accounts associated with user belonging to the
-	 * active session.
-	 *
-	 * Needs: active session
-	 * Requests: -
-	 * Returns: struct kbp_reply_account[n]
-	 */
-	KBP_T_ACCOUNTS,
-	/*
-	 * Request a PIN change for card that initiated the active session.
-	 *
-	 * Needs: active session
-	 * Requests: char pin[KBP_PIN_MAX + 1]
-	 * Returns: -
-	 */
-	KBP_T_PIN_UPDATE,
 	/*
 	 * Start a new session (one allowed per connection).
 	 * A session shall last KBP_TIMEOUT minutes. Requests made after this
@@ -235,5 +217,3 @@ struct kbp_reply_transaction {
 	/* Amount in EUR * 100 (2 decimal places) */
 	int64_t		amount;
 } __attribute__((packed));
-
-#endif

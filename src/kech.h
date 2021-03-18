@@ -1,9 +1,8 @@
 /*
  *
- * kech-server
- * kech.h
+ * hb-server
  *
- * Copyright (C) 2018 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+ * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,8 +24,7 @@
  *
  */
 
-#ifndef _KECH_H
-#define _KECH_H
+#pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -72,5 +70,3 @@ int transactions_get(char **buf);
 int transfer(MYSQL *sql, struct token *tok, char **buf);
 
 void *session(void *_conn);
-
-#endif

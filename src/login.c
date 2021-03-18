@@ -1,7 +1,6 @@
 /*
  *
- * kech-server
- * login.c
+ * hb-server
  *
  * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
@@ -31,21 +30,18 @@
 
 #include <argon2.h>
 
-#include "kbp.h"
-#include "kech.h"
+#include "hbp.h"
+#include "herbank.h"
 
-static int attempts_update(MYSQL *sql, uint32_t user_id, uint32_t card_id,
-		bool success)
+static int attempts_update(MYSQL *sql, uint32_t user_id, uint32_t card_id, bool success)
 {
 	char *_q, *q = NULL;
 
 	/* Prepare the query to update/reset the number of attempts made */
 	if (success)
-		_q = "UPDATE `cards` SET `attempts` = 0 WHERE "
-				"`user_id` = %u AND `card_id` = %u";
+		_q = "UPDATE `cards` SET `attempts` = 0 WHERE `user_id` = %u AND `card_id` = %u";
 	else
-		_q = "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE "
-				"`user_id` = %u AND `card_id` = %u";
+		_q = "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `user_id` = %u AND `card_id` = %u";
 	if (!(q = malloc(snprintf(NULL, 0, _q, user_id, card_id) + 1)))
 		goto err;
 	sprintf(q, _q, user_id, card_id);

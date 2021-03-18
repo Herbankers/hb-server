@@ -1,7 +1,6 @@
 /*
  *
- * kech-server
- * main.c
+ * hb-server
  *
  * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
@@ -43,8 +42,8 @@
 #  include <errno.h>
 #endif
 
-#include "kech.h"
-#include "kbp.h"
+#include "hbp.h"
+#include "herbank.h"
 
 char port[6];
 #if SSLSOCK
