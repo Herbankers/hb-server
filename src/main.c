@@ -62,7 +62,7 @@ char *sql_host, *sql_db, *sql_user, *sql_pass;
 uint16_t sql_port;
 
 /* logging print function */
-void lprintf(const char *msg, ...)
+void lprintf(const char *fmt, ...)
 {
 	FILE *file = NULL;
 	time_t t;
@@ -76,18 +76,18 @@ void lprintf(const char *msg, ...)
 		t = time(NULL);
 		tm = localtime(&t);
 
-		va_start(args, msg);
+		va_start(args, fmt);
 		fprintf(file, "[%04d-%02d-%02d %02d:%02d:%02d] ", 1900 + tm->tm_year, tm->tm_mon, tm->tm_mday,
 				tm->tm_hour, tm->tm_min, tm->tm_sec);
-		vfprintf(file, msg, args);
+		vfprintf(file, fmt, args);
 		va_end(args);
 
 		fclose(file);
 	}
 
 	if (verbose) {
-		va_start(args, msg);
-		vprintf(msg, args);
+		va_start(args, fmt);
+		vprintf(fmt, args);
 		va_end(args);
 	}
 
@@ -111,18 +111,18 @@ static int ssl_initialize(void)
 
 	/* load CA */
 	if (access(ca, F_OK) < 0) {
-		fprintf(stderr, "%s: %s\n", ca, strerror(errno));
+		lprintf("%s: %s\n", ca, strerror(errno));
 		goto err;
 	}
 	lprintf("using '%s' CA\n", ca);
 	if (!SSL_CTX_load_verify_locations(ctx, ca, NULL)) {
-		fprintf(stderr, "unable to load CA: %s\n", ca);
+		lprintf("unable to load CA: %s\n", ca);
 		goto err;
 	}
 
 	/* load certificate and private key files */
 	if (access(cert, F_OK) < 0) {
-		fprintf(stderr, "%s: %s\n", cert, strerror(errno));
+		lprintf("%s: %s\n", cert, strerror(errno));
 		goto err;
 	}
 	lprintf("using '%s' certificate\n", cert);
@@ -130,7 +130,7 @@ static int ssl_initialize(void)
 		goto err;
 
 	if (access(key, F_OK) < 0) {
-		fprintf(stderr, "%s: %s\n", key, strerror(errno));
+		lprintf("%s: %s\n", key, strerror(errno));
 		goto err;
 	}
 	lprintf("using '%s' private key\n", key);
@@ -190,13 +190,13 @@ static int run(void)
 
 	/* create the socket */
 	if ((sock = socket(PF_INET6, SOCK_STREAM, 0)) < 0) {
-		fprintf(stderr, "unable to create socket: %s\n", strerror(errno));
+		lprintf("unable to create socket: %s\n", strerror(errno));
 		return -1;
 	}
 
 	/* allow socket to be reused */
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) < 0) {
-		fprintf(stderr, "%s\n", strerror(errno));
+		lprintf("%s\n", strerror(errno));
 		return -1;
 	}
 
@@ -207,26 +207,26 @@ static int run(void)
 
 	lprintf(" Binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
-		fprintf(stderr, "unable to bind socket: %s\n", strerror(errno));
+		lprintf("unable to bind socket: %s\n", strerror(errno));
 		return -1;
 	}
 
 	lprintf(" Listening for connections...\n");
 	if (listen(sock, SOMAXCONN) < 0) {
-		fprintf(stderr, "%s\n", strerror(errno));
+		lprintf("%s\n", strerror(errno));
 		return -1;
 	}
 
 	/* listen for clients */
 	for (;;) {
 		if ((csock = accept(sock, NULL, NULL)) < 0) {
-			fprintf(stderr, "%s\n", strerror(errno));
+			lprintf("%s\n", strerror(errno));
 			continue;
 		}
 
 		/* create a thread for every new connection */
 		if (pthread_create(&thread, NULL, session, &csock)) {
-			fprintf(stderr, "unable to allocate thread\n");
+			lprintf("unable to allocate thread\n");
 			close(csock);
 		}
 	}
@@ -363,15 +363,15 @@ int main(int argc, char **argv)
 
 #if SSLSOCK
 	if (!ca) {
-		fprintf(stderr, "hb-server: please specify a CA file\n");
+		lprintf("hb-server: please specify a CA file\n");
 		usage(argv[0]);
 		goto err;
 	} else if (!cert) {
-		fprintf(stderr, "hb-server: please specify a certificate file\n");
+		lprintf("hb-server: please specify a certificate file\n");
 		usage(argv[0]);
 		goto err;
 	} else if (!key) {
-		fprintf(stderr, "hb-server: please specify a private key file\n");
+		lprintf("hb-server: please specify a private key file\n");
 		usage(argv[0]);
 		goto err;
 	}

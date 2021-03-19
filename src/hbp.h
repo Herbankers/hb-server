@@ -1,4 +1,4 @@
-
+/** @file */
 /*
  *
  * HerBank Protocol v1
@@ -45,23 +45,23 @@
  * Limits
  */
 
-/* Maximum number of erroneous requests before closing the connection */
+/** Maximum number of erroneous requests before closing the connection */
 #define HBP_ERROR_MAX	10
-/* Maximum request/reply data length in bytes */
+/** Maximum request/reply data length in bytes */
 #define HBP_LENGTH_MAX	65536
-/* Minimum length for an IBAN (per ISO 13616-1:2007) */
+/** Minimum length for an IBAN (per ISO 13616-1:2007) */
 #define HBP_IBAN_MIN	9
-/* Maximum length for an IBAN (per ISO 13616-1:2007) */
+/** Maximum length for an IBAN (per ISO 13616-1:2007) */
 #define HBP_IBAN_MAX	34
-/* Minimum length for a PIN (per ISO 9564-1:2011) */
+/** Minimum length for a PIN (per ISO 9564-1:2011) */
 #define HBP_PIN_MIN	4
-/* Maximum length for a PIN (per ISO 9564-1:2011) */
+/** Maximum length for a PIN (per ISO 9564-1:2011) */
 #define HBP_PIN_MAX	12
-/* Maximum times PIN entry can be attempted before blocking the card */
+/** Maximum times PIN entry can be attempted before blocking the card */
 #define HBP_PINTRY_MAX	3
-/* Session timeout in seconds */
-#define HBP_TIMEOUT	(5 * 60)
-/* Card UI length in bytes */
+/** Session timeout in seconds */
+#define HBP_TIMEOUT	(10 * 60)
+/** Card UI length in bytes */
 #define HBP_UID_MAX	6
 
 
@@ -86,6 +86,47 @@ typedef enum {
 	/* Blocked card */
 	KBP_L_BLOCKED
 } kbp_login_res;
+
+/** Requests types */
+typedef enum {
+	/**
+	 * @brief Request to start a new session
+	 *
+	 * A session will automatically time out after HBP_TIMEOUT seconds, regardless of activity. Loss of connection
+	 * or sending more than HBP_ERROR_MAX invalid requests will also end an active session.
+	 * Only one session per connection is possible.
+	 *
+	 */
+	HBP_REQ_LOGIN,
+
+	HBP_REQ_LOGOUT,
+
+	HBP_REQ_INFO,
+
+	HBP_REQ_BALANCE,
+
+	HBP_REQ_TRANSFER
+} hbp_request_t;
+
+/** Reply types */
+typedef enum {
+	HBP_REP_LOGIN,
+	/**
+	 * @brief Reply to a request for a new session
+	 *
+	 * @return HBP_L_GRANTED sdf
+	 * @return HBP_L_DENIED
+	 * @return HBP_L_BLOCKED
+	 */
+
+	HBP_REP_LOGOUT,
+
+	HBP_REP_INFO,
+
+	HBP_REP_BALANCE,
+
+	HBP_REP_TRANSFER
+};
 
 /* Requests */
 typedef enum {

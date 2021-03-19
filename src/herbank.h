@@ -1,3 +1,4 @@
+/** @file */
 /*
  *
  * hb-server
@@ -35,7 +36,12 @@
 
 #include <mysql.h>
 
-/* Session token */
+/**
+ * @brief Session token
+ *
+ * A new instance of struct token is created for every client that connects and successfully logs in.
+ * The information in this struct is only used internally and not available or sent to the client at any moment.
+ */
 struct token {
 	bool		valid;
 	uint32_t	user_id;
@@ -43,14 +49,20 @@ struct token {
 	time_t		expiry_time;
 };
 
-/* argon2 hashing parameters */
-#define ARGON2_PASS	2	/* 2 passes */
-#define ARGON2_MEMORY	65536	/* 64 Mb memory usage limit */
-#define ARGON2_PARALLEL	1	/* number of threads */
-#define ARGON2_SALT_LEN 16	/* length of the salt in bytes */
-#define ARGON2_HASH_LEN 32	/* length of the output hash in bytes */
-#define ARGON2_ENC_LEN	108	/* length of the output encoded string (hash + salt + params) in bytes */
+/** @brief argon2: Number of passes to make */
+#define ARGON2_PASS	2
+/** @brief argon2: Memory usage limit */
+#define ARGON2_MEMORY	65536
+/** @brief argon2: Number of threads */
+#define ARGON2_PARALLEL	1
+/** @brief argon2: Length of the salt in bytes */
+#define ARGON2_SALT_LEN 16
+/** @brief argon2: Length of the output hash in bytes */
+#define ARGON2_HASH_LEN 32
+/** @brief argon2: Length of the output encoded string (hash + salt + params) in bytes */
+#define ARGON2_ENC_LEN	108
 
+/** @brief Port on which the server will be hosted */
 extern char port[6];
 #if SSLSOCK
 extern SSL_CTX *ctx;
@@ -58,10 +70,17 @@ extern SSL_CTX *ctx;
 extern char *sql_host, *sql_db, *sql_user, *sql_pass;
 extern uint16_t sql_port;
 
-void lprintf(const char *msg, ...);
-
-int iban_getcheck(const char *_iban);
-bool iban_validate(const char *iban);
+/**
+ * @brief Log to command-line (and optionally to a log file)
+ *
+ * This function prints to the command-line (when the -v flag is specified in argv).
+ * The log is also written to a file (when -o is specified in argv).
+ * Parameters are exactly the same as printf(3).
+ *
+ * @param fmt Specifies how subsequent arguments are converted
+ * @param ... Variable number of arguments
+ */
+void lprintf(const char *fmt, ...);
 
 int accounts_get(MYSQL *sql, struct token *tok, char **buf);
 int login(MYSQL *sql, struct token *tok, char **buf);
@@ -69,4 +88,15 @@ int pin_update(MYSQL *sql, struct token *tok, char **buf);
 int transactions_get(char **buf);
 int transfer(MYSQL *sql, struct token *tok, char **buf);
 
-void *session(void *_conn);
+int iban_getcheck(const char *_iban);
+bool iban_validate(const char *iban);
+
+/**
+ * @brief Session thread
+ *
+ * This function is called on a new thread for every client that connects to our server.
+ *
+ * @param args An argument list received from the main thread, in our case containing only a copy of the client socket
+ *             connection handler
+ */
+void *session(void *args);

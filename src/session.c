@@ -156,7 +156,7 @@ static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 	return 1;
 }
 
-void *session(void *_sock)
+void *session(void *args)
 {
 	struct addrinfo *addr = NULL, hints;
 	struct kbp_request req;
@@ -169,7 +169,7 @@ void *session(void *_sock)
 	SSL *ssl = NULL;
 #endif
 
-	sock = *((int *) _sock);
+	sock = *((int *) args);
 
 	rep.magic = KBP_MAGIC;
 	rep.version = KBP_VERSION;

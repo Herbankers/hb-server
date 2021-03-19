@@ -17,7 +17,7 @@ set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
 find_package(OpenSSL REQUIRED)
 
 # cJSON
-find_package(cJSON REQUIRED)
+find_package(msgpack REQUIRED)
 
 # pkgconfig packages
 find_package(PkgConfig REQUIRED)
@@ -25,8 +25,8 @@ pkg_check_modules(ARGON2 REQUIRED libargon2)
 pkg_check_modules(MARIADB REQUIRED libmariadb)
 
 set(HEADERS
-	src/kbp.h
-	src/kech.h
+	src/hbp.h
+	src/herbank.h
 )
 
 set(SOURCES
@@ -54,8 +54,8 @@ target_link_libraries(${PROJECT_NAME}
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
 	${ARGON2_INCLUDE_DIRS}
-	${CJSON_INCLUDE_DIR}
 	${MARIADB_INCLUDE_DIRS}
+	${MSGPACK_INCLUDE_DIR}
 	${OPENSSL_INCLUDE_DIR}
 )
 target_compile_options(${PROJECT_NAME} PUBLIC

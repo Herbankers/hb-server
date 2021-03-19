@@ -13,8 +13,15 @@
 *.swp
 *.synctex.gz
 
+# Certificates
 crt/*
 
+# CMake
 build/*
 
+# Doxygen
+doc/html/*
+doc/latex/*
+
+# macOS
 .DS_Store
