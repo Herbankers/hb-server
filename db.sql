@@ -55,3 +55,19 @@ CREATE TABLE IF NOT EXISTS `transactions` (
 	`amount`	BIGINT			NOT NULL,
 	PRIMARY KEY (`id`)
 );
+
+--
+-- WARNING!
+-- Change the passwords before loading this file
+--
+
+-- This user is used by hb-server
+CREATE USER 'hb-server'@'localhost' IDENTIFIED BY 'password';
+GRANT SELECT ON `herbankdb`.* TO `hb-server`@`localhost`;
+GRANT INSERT ON `herbankdb`.`transactions` TO `hb-server`@`localhost`;
+GRANT UPDATE ON `herbankdb`.`cards` TO `hb-server`@`localhost`;
+GRANT UPDATE ON `herbankdb`.`accounts` TO `hb-server`@`localhost`;
+
+-- This user is used by hb-cli
+CREATE USER 'hb-cli'@'localhost' IDENTIFIED BY 'password';
+GRANT DELETE,INSERT,SELECT,UPDATE ON `herbankdb`.* TO `hb-cli`@`localhost`;

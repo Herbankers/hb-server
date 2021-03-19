@@ -161,7 +161,7 @@ err:
  * TODO Handle SIGNALS for server termination, like waiting for clients to
  * terminate
  *
- * e.g. send all clients a that their session has terminated (HBP_TERM_SERVDOWN)
+ * e.g. send all clients a that their session has terminated (HBP_REP_LOGOUT)
  */
 static int run(void)
 {

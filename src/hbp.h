@@ -33,11 +33,9 @@
  * General
  */
 
-/* HBP MAGIC number ("HERB") */
-#define HBP_MAGIC	0x48455242
-/* HBP version */
+/** @brief Version of the HBP protocol */
 #define HBP_VERSION	1
-/* HBP server default port */
+/** @brief Default port on which hb-server is hosted */
 #define HBP_PORT	8420
 
 
@@ -45,216 +43,139 @@
  * Limits
  */
 
-/** Maximum number of erroneous requests before closing the connection */
+/** @brief Maximum number of erroneous requests before closing the connection */
 #define HBP_ERROR_MAX	10
-/** Maximum request/reply data length in bytes */
-#define HBP_LENGTH_MAX	65536
-/** Minimum length for an IBAN (per ISO 13616-1:2007) */
+/** @brief Maximum request/reply data length in bytes */
+#define HBP_LENGTH_MAX	8192
+/** @brief Minimum length for an IBAN (per ISO 13616-1:2007) */
 #define HBP_IBAN_MIN	9
-/** Maximum length for an IBAN (per ISO 13616-1:2007) */
+/** @brief Maximum length for an IBAN (per ISO 13616-1:2007) */
 #define HBP_IBAN_MAX	34
-/** Minimum length for a PIN (per ISO 9564-1:2011) */
+/** @brief Minimum length for a PIN (per ISO 9564-1:2011) */
 #define HBP_PIN_MIN	4
-/** Maximum length for a PIN (per ISO 9564-1:2011) */
+/** @brief Maximum length for a PIN (per ISO 9564-1:2011) */
 #define HBP_PIN_MAX	12
-/** Maximum times PIN entry can be attempted before blocking the card */
+/** @brief Maximum times PIN entry can be attempted before blocking the card */
 #define HBP_PINTRY_MAX	3
-/** Session timeout in seconds */
+/** @brief Session timeout in seconds */
 #define HBP_TIMEOUT	(10 * 60)
-/** Card UI length in bytes */
+/** @brief Card UI length in bytes */
 #define HBP_UID_MAX	6
 
+/** @brief Requests types */
+typedef enum {
+	/**
+	 * @brief Request to start a new session
+	 *
+	 * A session will automatically time out after #HBP_TIMEOUT seconds, regardless of activity. Loss of connection
+	 * or sending more than #HBP_ERROR_MAX invalid requests will also end an active session.
+	 * Only one session per connection is possible.
+	 *
+	 */
+	HBP_REQ_LOGIN,
 
-/*
- * Types
- */
+	/**
+	 * @brief Request to terminate the current session
+	 *
+	 * Logout of the current session. After this, a new session can be started again immediately.
+	 */
+	HBP_REQ_LOGOUT,
 
+	/**
+	 * @brief Not yet implemented
+	 *
+	 * TODO
+	 */
+	HBP_REQ_INFO,
+
+	/**
+	 * @brief Not yet implemented
+	 *
+	 * TODO
+	 */
+	HBP_REQ_BALANCE,
+
+	/**
+	 * @brief Not yet implemented
+	 *
+	 * TODO
+	 */
+	HBP_REQ_TRANSFER
+} hbp_request_t;
+
+/** @brief Reply types */
+typedef enum {
+	/**
+	 * @brief Reply to a request for a new session
+	 *
+	 * For the request associated with this reply, see #HBP_REQ_LOGIN
+	 *
+	 * @param type HBP_REP_LOGIN
+	 * @param status See #hbp_login_t
+	 */
+	HBP_REP_LOGIN,
+
+	/**
+	 * @brief Reply to a request to logout (also sent when the connection is about to be terminated unexpectedly)
+	 *
+	 * For the request associated with this reply, see #HBP_REQ_LOGOUT
+	 *
+	 * This reply may also be sent when either the server is about to be shut down or if the session has expired.
+	 *
+	 * @param reason See #hbp_term_t
+	 */
+	HBP_REP_TERMINATED,
+
+	/**
+	 * @brief Not yet implemented
+	 *
+	 * TODO
+	 */
+	HBP_REP_INFO,
+
+	/**
+	 * @brief Not yet implemented
+	 *
+	 * TODO
+	 */
+	HBP_REP_BALANCE,
+
+	/**
+	 * @brief Not yet implemented
+	 *
+	 * TODO
+	 */
+	HBP_REP_TRANSFER
+};
+
+/** @brief Indicates whether the login failed or succeeded */
+typedef enum {
+	/** The login was successful */
+	HBP_LOGIN_GRANTED,
+	/** The card UID or PIN-code is incorrect */
+	HBP_LOGIN_DENIED,
+	/** This card has been blocked because of a number of invalid logins */
+	HBP_LOGIN_BLOCKED,
+	/** The server couldn't complete the request because of an error, check the server logs */
+	HBP_LOGIN_ERROR
+} hbp_login_t;
+
+/** @brief Indicates why the session has ended */
+typedef enum {
+	/** The client has request to logout. Logout has succeeded */
+	HBP_TERM_LOGOUT,
+	/** The current session has expired because #HBP_TIMEOUT has been reached */
+	HBP_TERM_EXPIRED,
+	/** The server couldn't complete the request because of an error, check the server logs */
+	HBP_TERM_ERROR
+} hbp_term_t;
+
+#if 0
 /* Account types */
 typedef enum {
 	/* Checkings account */
 	HBP_A_CHECKING,
 	/* Savings account */
 	HBP_A_SAVINGS
-} kbp_account_t;
-
-/* Login results */
-typedef enum {
-	/* Successful login */
-	KBP_L_GRANTED,
-	/* Invalid PIN */
-	KBP_L_DENIED,
-	/* Blocked card */
-	KBP_L_BLOCKED
-} kbp_login_res;
-
-/** Requests types */
-typedef enum {
-	/**
-	 * @brief Request to start a new session
-	 *
-	 * A session will automatically time out after HBP_TIMEOUT seconds, regardless of activity. Loss of connection
-	 * or sending more than HBP_ERROR_MAX invalid requests will also end an active session.
-	 * Only one session per connection is possible.
-	 *
-	 */
-	HBP_REQ_LOGIN,
-
-	HBP_REQ_LOGOUT,
-
-	HBP_REQ_INFO,
-
-	HBP_REQ_BALANCE,
-
-	HBP_REQ_TRANSFER
-} hbp_request_t;
-
-/** Reply types */
-typedef enum {
-	HBP_REP_LOGIN,
-	/**
-	 * @brief Reply to a request for a new session
-	 *
-	 * @return HBP_L_GRANTED sdf
-	 * @return HBP_L_DENIED
-	 * @return HBP_L_BLOCKED
-	 */
-
-	HBP_REP_LOGOUT,
-
-	HBP_REP_INFO,
-
-	HBP_REP_BALANCE,
-
-	HBP_REP_TRANSFER
-};
-
-/* Requests */
-typedef enum {
-	/*
-	 * Start a new session (one allowed per connection).
-	 * A session shall last KBP_TIMEOUT minutes. Requests made after this
-	 * time will be answered with status flag KBP_S_TIMEOUT. Closing the
-	 * connection (unexpectedly) or sending more than KBP_ERROR_MAX invalid
-	 * requests will also end the session. KBP_L_DENIED shall be returned
-	 * on an invalid pin entry. KBP_PINTRY_MAX invalid entries will result
-	 * in the card being blocked after which KBP_L_BLOCKED shall be
-	 * returned until the card is manually unblocked again. KBP_L_GRANTED
-	 * will be returned if a session has successfully been started.
-	 *
-	 * Needs: -
-	 * Requests: struct kbp_request_login
-	 * Returns: uint8_t (kbp_login_res)
-	 */
-	KBP_T_LOGIN,
-	/*
-	 * End the active session. Returns KBP_S_TIMEOUT on success.
-	 *
-	 * Needs: active session
-	 * Requests: -
-	 * Returns: -
-	 */
-	KBP_T_LOGOUT,
-	/*
-	 * Request an array of transactions associated with iban, iban must
-	 * belong to the user associated with the active session.
-	 *
-	 * Needs: active session
-	 * Requests: char iban[KBP_IBAN_MAX + 1]
-	 * Returns: struct kbp_reply_transaction[n]
-	 */
-	KBP_T_TRANSACTIONS,
-	/*
-	 * Transfer from iban_src to iban_dest, the iban_src must belong to the
-	 * user associated with the active session. An empty iban_src signifies
-	 * a deposit. Likewise, an empty iban_dest signifies a withdrawal.
-	 *
-	 * Needs: active session
-	 * Requests: struct kbp_request_transfer
-	 * Returns: -
-	 */
-	KBP_T_TRANSFER
-} kbp_request_t;
-
-/* Reply status */
-typedef enum {
-	/* Session has timed out */
-	KBP_S_TIMEOUT = -2,
-	/* Invalid request */
-	KBP_S_INVALID,
-	/* Request failed */
-	KBP_S_FAIL,
-	/* Request succeeded */
-	KBP_S_OK
-} kbp_reply_s;
-
-
-/*
- * Requests
- */
-
-/* Request header */
-struct kbp_request {
-	/* Magic number (KBP_MAGIC) */
-	uint32_t	magic;
-	/* KBP Version (KBP_VERSION) */
-	uint8_t		version;
-	/* Request type (kbp_request_t) */
-	uint8_t		type;
-	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
-	uint32_t	length;
-} __attribute__((packed));
-
-/* Login request */
-struct kbp_request_login {
-	/* Card UID */
-	uint8_t		uid[KBP_UID_MAX];
-	/* PIN */
-	char		pin[KBP_PIN_MAX + 1];
-} __attribute__((packed));
-
-/* Transfer request */
-struct kbp_request_transfer {
-	/* Source IBAN (must be accessible with the active session) */
-	char		iban_src[KBP_IBAN_MAX + 1];
-	/* Destination IBAN */
-	char		iban_dest[KBP_IBAN_MAX + 1];
-	/* Amount in EUR * 100 (2 decimal places) */
-	int64_t		amount;
-} __attribute__((packed));
-
-
-/*
- * Replies
- */
-
-/* Reply header */
-struct kbp_reply {
-	/* Magic number (KBP_MAGIC) */
-	uint32_t	magic;
-	/* KBP Version (KBP_VERSION) */
-	uint8_t		version;
-	/* Reply status (kbp_reply_s) */
-	int8_t		status;
-	/* Data length in bytes (may not exceed KBP_LENGTH_MAX) */
-	uint32_t	length;
-} __attribute__((packed));
-
-/* Account reply */
-struct kbp_reply_account {
-	/* IBAN */
-	char		iban[KBP_IBAN_MAX + 1];
-	/* Account type (kbp_account_t) */
-	uint8_t		type;
-	/* Balance in EUR * 100 (2 decimal places) */
-	int64_t		balance;
-} __attribute__((packed));
-
-/* Transaction reply */
-struct kbp_reply_transaction {
-	/* Source IBAN */
-	char		iban_src[KBP_IBAN_MAX + 1];
-	/* Destination IBAN */
-	char		iban_dest[KBP_IBAN_MAX + 1];
-	/* Amount in EUR * 100 (2 decimal places) */
-	int64_t		amount;
-} __attribute__((packed));
+} hbp_account_t;
+#endif
