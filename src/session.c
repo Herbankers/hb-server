@@ -36,18 +36,19 @@
 #  include <openssl/err.h>
 #  include <openssl/ssl.h>
 
-#  define READ(b, n)	SSL_read(ssl, (b), (n))
-#  define WRITE(b, n)	SSL_write(ssl, (b), (n))
+#  define READ(b, n)	SSL_read(conn->ssl, (b), (n))
+#  define WRITE(b, n)	SSL_write(conn->ssl, (b), (n))
 #else
 #  include <errno.h>
 
-#  define READ(b, n)	read(sock, (b), (n))
-#  define WRITE(b, n)	write(sock, (b), (n))
+#  define READ(b, n)	read(conn->socket, (b), (n))
+#  define WRITE(b, n)	write(conn->socket, (b), (n))
 #endif
 
 #include "hbp.h"
 #include "herbank.h"
 
+#if 0
 static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 		struct token *tok, struct kbp_reply *rep)
 {
@@ -57,8 +58,7 @@ static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 	/* Check if session hasn't timed out */
 	if (tok->valid) {
 		if (time(NULL) > tok->expiry_time) {
-			lprintf("%s: session timeout: %u,%u\n", host,
-					tok->user_id, tok->card_id);
+			lprintf("%s: session timeout: %u,%u\n", host, tok->user_id, tok->card_id);
 
 			tok->valid = 0;
 			rep->status = KBP_S_TIMEOUT;
@@ -155,175 +155,257 @@ static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
 
 	return 1;
 }
-
-void *session(void *args)
-{
-	struct addrinfo *addr = NULL, hints;
-	struct kbp_request req;
-	struct kbp_reply rep;
-	struct token tok;
-	char *buf, host[INET6_ADDRSTRLEN];
-	int res, errcnt = 0, sock;
-	MYSQL *sql = NULL;
-#if SSLSOCK
-	SSL *ssl = NULL;
 #endif
 
-	sock = *((int *) args);
+/* connect to the client and verify the client certificate */
+static bool verify(struct connection *conn)
+{
+	struct addrinfo *addr = NULL;
+	struct addrinfo hints;
 
-	rep.magic = KBP_MAGIC;
-	rep.version = KBP_VERSION;
-	memset(&tok, 0, sizeof(tok));
-
-	/* Get client IP */
+	/* retrieve the client IP */
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	/* Resolve the host */
+	/* resolve the host */
 	if (getaddrinfo(NULL, port, &hints, &addr) != 0) {
-		lprintf("unable to resolve host %s\n", host);
-		goto ret;
+		lprintf("unable to resolve host %s\n", conn->host);
+		return false;
 	}
 
 	if (addr->ai_addr->sa_family == AF_INET)
-		inet_ntop(AF_INET,
-				&((struct sockaddr_in *) &addr->ai_addr)->sin_addr.s_addr,
-				host, INET_ADDRSTRLEN);
+		inet_ntop(AF_INET, &((struct sockaddr_in *) &addr->ai_addr)->sin_addr.s_addr,
+				conn->host, INET_ADDRSTRLEN);
 	else if (addr->ai_addr->sa_family == AF_INET6)
-		inet_ntop(AF_INET6,
-				&((struct sockaddr_in6 *) &addr->ai_addr)->sin6_addr.s6_addr,
-				host, INET6_ADDRSTRLEN);
-	lprintf("%s: new connection\n", host);
+		inet_ntop(AF_INET6, &((struct sockaddr_in6 *) &addr->ai_addr)->sin6_addr.s6_addr,
+				conn->host, INET6_ADDRSTRLEN);
+
+	freeaddrinfo(addr);
 
 #if SSLSOCK
-	/* Setup an SSL/TLS connection */
-	if (!(ssl = SSL_new(ctx))) {
+	/* setup an SSL/TLS connection */
+	if (!(conn->ssl = SSL_new(ctx))) {
 		lprintf("unable to allocate SSL structure\n");
-		goto ret;
+		return false;
 	}
-	SSL_set_fd(ssl, sock);
+	SSL_set_fd(conn->ssl, conn->socket);
 
-	if (SSL_accept(ssl) <= 0) {
-		lprintf("%s: SSL error\n", host);
-		goto ret;
+	if (SSL_accept(conn->ssl) <= 0) {
+		lprintf("%s: SSL error\n", conn->host);
+		return false;
 	}
 
-	/* Get and verify the client certificate */
-	if (!SSL_get_peer_certificate(ssl)) {
+	/* get and verify the client certificate */
+	if (!SSL_get_peer_certificate(conn->ssl)) {
 		lprintf("client failed to present certificate\n");
-		goto ret;
+		return false;
 	}
-	if (SSL_get_verify_result(ssl) != X509_V_OK) {
+	if (SSL_get_verify_result(conn->ssl) != X509_V_OK) {
 		lprintf("certificate verfication failed\n");
-		goto ret;
+		return false;
 	}
 #endif
 
-	/* Connect to the database */
-	if (!(sql = mysql_init(NULL))) {
-		lprintf("mysql internal error\n");
-		goto ret;
-	}
+	lprintf("%s: connected!\n", conn->host);
 
-	if (!mysql_real_connect(sql, sql_host, sql_user, sql_pass, sql_db,
-			sql_port, NULL, 0)) {
-		lprintf("database connection error\n");
-		goto ret;
-	}
+	return true;
+}
 
-	/* FIXME Do this more dynamically */
-	for (;;) {
-		/* Check if maximum error count hasn't been exceeded. */
-		if (errcnt > KBP_ERROR_MAX) {
-			lprintf("%s: maximum error count (%d) has been "
-					"exceeded\n", host, KBP_ERROR_MAX);
-			break;
-		}
+/* send a reply to the client */
+static bool sendreply(struct connection *conn, struct hbp_header *reply, const char *data)
+{
+	/* send the reply header */
+	if (WRITE(&reply, sizeof(struct hbp_header)) <= 0)
+		return false;
 
-		/* Wait for requests from the client */
-		if ((res = READ(&req, sizeof(req))) <= 0) {
+	/* send the reply data */
+	if (reply->length && WRITE(data, reply->length) <= 0)
+		return false;
+
+	return true;
+}
+
+/* wait for the client to send a request */
+static int receiverequest(struct connection *conn, struct hbp_header *request, char **buf)
+{
+	int res;
+
+	/* wait for the client to send a request header */
+	if ((res = READ(&request, sizeof(struct hbp_header))) <= 0) {
 #if SSLSOCK
-			if (SSL_get_error(ssl, res) == SSL_ERROR_ZERO_RETURN)
-				break;
-#else
-			/* Is this right? */
-			if (!res)
-				break;
+		if (SSL_get_error(ssl, res) == SSL_ERROR_ZERO_RETURN)
+			return -1;
 #endif
-			lprintf("%s: header read error\n", host);
-			errcnt++;
-			continue;
+		return 0;
+	}
+
+	/* check if the header is valid and if a compatible HBP version is used by the client */
+	if (request->magic != HBP_MAGIC || request->length > HBP_LENGTH_MAX)
+		return 0;
+	if (request->version != HBP_VERSION) {
+		lprintf("%s: HBP version mismatch (client has: %u, server wants %u)\n",
+				conn->host, request->version, HBP_VERSION);
+		return -1;
+	}
+
+	/* TODO resolve to string */
+	lprintf("%s: request %u\n", conn->host, request->type);
+
+	/* read request data (if available) */
+	if (request->length) {
+		if (!(*buf = malloc(request->length))) {
+			lprintf("out of memory\n");
+			return 0;
 		}
-		if (req.magic != KBP_MAGIC || req.length > KBP_LENGTH_MAX) {
-			lprintf("%s: invalid request\n", host);
-			errcnt++;
-			continue;
+
+		if (READ(*buf, request->length) <= 0) {
+			free(*buf);
+			return 0;
 		}
-		if (req.version != KBP_VERSION) {
-			lprintf("%s: KBP version mismatch (got %u want %u)\n",
-					host, req.version, KBP_VERSION);
+	} else {
+		*buf = NULL;
+	}
+
+	return 1;
+}
+
+/* handle the specified request and generate an appropriate reply */
+static bool handle_request(struct connection *conn, struct hbp_header *request, const char *request_data,
+		struct hbp_header *reply, char **reply_data)
+{
+	msgpack_sbuffer sbuf;
+	msgpack_packer pack;
+
+	msgpack_sbuffer_init(&sbuf);
+	msgpack_packer_init(&pack, &sbuf, msgpack_sbuffer_write);
+
+	/* check if the session hasn't timed out */
+	if (conn->logged_in && time(NULL) > conn->expiry_time) {
+		lprintf("%s: session timeout: user%u, card%u\n", conn->host, conn->user_id, conn->card_id);
+
+		/* reply header */
+		reply->type = HBP_REP_TERMINATED;
+
+		/* @param reason */
+		msgpack_pack_uint8(&pack, HBP_TERM_EXPIRED);
+	} else {
+		switch (request->type) {
+		case HBP_REQ_LOGIN:
+			if (!login(conn, request_data, request->length, reply, &pack))
+				return false;
+			break;
+		case HBP_REQ_LOGOUT:
+			break;
+		case HBP_REQ_INFO:
+		case HBP_REQ_BALANCE:
+		case HBP_REQ_TRANSFER:
+		/* invalid request */
+		default:
+			return false;
+		}
+	}
+
+	/* copy the msgpack buffer to a newly allocated array to be returned */
+	if ((*reply_data = malloc(sbuf.size))) {
+		memcpy(*reply_data, sbuf.data, sbuf.size);
+		reply->length = sbuf.size;
+	} else {
+		lprintf("out of memory\n");
+	}
+
+	return true;
+}
+
+void *session(void *args)
+{
+	struct connection conn;
+	struct hbp_header request, reply;
+	char *request_data, *reply_data;
+
+	/* set reply header parameters */
+	reply.magic = HBP_MAGIC;
+	reply.version = HBP_VERSION;
+
+	/* allocate initial buffers for reply and request data */
+	request_data = malloc(128);
+	reply_data = malloc(128);
+
+	/* setup our connection structure */
+	memset(&conn, 0, sizeof(struct connection));
+	conn.socket = *((int *) args);
+
+	/* verify the client certificate */
+	if (!verify(&conn))
+		goto ret;
+
+	/* connect to the database */
+	if (!(conn.sql = mysql_init(NULL))) {
+		lprintf("out of memory\n");
+		goto ret;
+	}
+	if (!mysql_real_connect(conn.sql, sql_host, sql_user, sql_pass, sql_db, sql_port, NULL, 0)) {
+		lprintf("failed to connect to the database: %s\n", mysql_error(conn.sql));
+		goto ret;
+	}
+
+	for (;;) {
+		/* disconnect if the maximum number of erroneous requests has been exceeded */
+		if (conn.errcnt > HBP_ERROR_MAX) {
+			lprintf("%s: the maximum error count (%d) has been exceeded\n", conn.host, HBP_ERROR_MAX);
+
 			break;
 		}
 
-		lprintf("%s: new request %u\n", host, req.type);
-
-		/* Read request data if available */
-		if (req.length) {
-			if (!(buf = malloc(req.length))) {
-				lprintf("out of memory\n");
-				break;
-			}
-
-			if (READ(buf, req.length) <= 0) {
-				lprintf("%s: read error\n", host);
-				errcnt++;
-				goto next;
-			}
-		} else {
-			buf = NULL;
+		/* listen for requests from the client */
+		switch (receiverequest(&conn, &request, &request_data)) {
+		case 1:
+			/* success */
+			break;
+		case 0:
+			lprintf("%s: invalid request\n", conn.host);
+			conn.errcnt++;
+			continue;
+		case -1:
+			break;
 		}
 
-		/* Process the request */
-		if (process(sql, &buf, host, &req, &tok, &rep) < 0) {
-			lprintf("%s: error processing request\n", host);
-			errcnt++;
-			goto next;
+		/* process the client's request */
+		if (!handle_request(&conn, &request, request_data, &reply, &reply_data)) {
+			lprintf("%s: error processing request\n", conn.host);
+			conn.errcnt++;
+
+			/* don't continue, but inform the client that processing their request has failed */
+			reply.type = HBP_REP_ERROR;
+			reply.length = 0;
 		}
 
-		/* Send the header */
-		if (WRITE(&rep, sizeof(struct kbp_reply)) <= 0) {
-			lprintf("%s: header write error\n", host);
-			errcnt++;
-			goto next;
+		/* send our reply */
+		if (!sendreply(&conn, &reply, reply_data)) {
+			lprintf("%s: error sending reply\n", conn.host);
+			conn.errcnt++;
+			continue;
 		}
 
-		/* Finally, send back the data */
-		if (rep.length && WRITE(buf, rep.length) <= 0) {
-			lprintf("%s: write error: %d\n", host, rep.length);
-			errcnt++;
-			goto next;
-		}
-
-		lprintf("%s: request %u has been processed: %d\n", host,
-				req.type, rep.status);
-
-next:
-		free(buf);
+		lprintf("%s: request %u has been processed\n", conn.host, request.type);
 	}
 
 ret:
-	lprintf("%s: terminating connection\n", host);
+	lprintf("%s: connection has terminated\n", conn.host);
 
-	/* Close the database connection */
-	mysql_close(sql);
+	/* free the reply and request data buffers */
+	free(request_data);
+	free(reply_data);
+
+	/* close the database connection */
+	mysql_close(conn.sql);
 	mysql_thread_end();
 
-	/* Close the client connection */
-	close(sock);
+	/* close the client connection */
+	close(conn.socket);
 #if SSLSOCK
-	SSL_free(ssl);
+	SSL_free(conn.ssl);
 #endif
 
 	pthread_exit(NULL);

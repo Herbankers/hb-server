@@ -35,18 +35,31 @@
 #include <netinet/in.h>
 
 #include <mysql.h>
+#include <msgpack.h>
 
 /**
- * @brief Session token
+ * @brief Connection information
  *
  * A new instance of struct token is created for every client that connects and successfully logs in.
  * The information in this struct is only used internally and not available or sent to the client at any moment.
  */
-struct token {
-	bool		valid;
+struct connection {
+	/** Client socket */
+	int		socket;
+	/** Client IP address */
+	char		host[INET6_ADDRSTRLEN];
+	/** MySQL database connection */
+	MYSQL		*sql;
+#if SSLSOCK
+	/** TLS/SSL connection information */
+	SSL		*ssl;
+#endif
+	int		errcnt;
+
+	bool		logged_in;
+	time_t		expiry_time;
 	uint32_t	user_id;
 	uint32_t	card_id;
-	time_t		expiry_time;
 };
 
 /** @brief argon2: Number of passes to make */
@@ -82,15 +95,6 @@ extern uint16_t sql_port;
  */
 void lprintf(const char *fmt, ...);
 
-int accounts_get(MYSQL *sql, struct token *tok, char **buf);
-int login(MYSQL *sql, struct token *tok, char **buf);
-int pin_update(MYSQL *sql, struct token *tok, char **buf);
-int transactions_get(char **buf);
-int transfer(MYSQL *sql, struct token *tok, char **buf);
-
-int iban_getcheck(const char *_iban);
-bool iban_validate(const char *iban);
-
 /**
  * @brief Session thread
  *
@@ -100,3 +104,24 @@ bool iban_validate(const char *iban);
  *             connection handler
  */
 void *session(void *args);
+
+/**
+ * @brief Run a MySQL query
+ *
+ * @param conn Connection structure (see struct #connection)
+ * @param fmt Specifies how subsequent arguments are converted
+ * @param ... Variable number of arguments
+ *
+ * @return True on success, False on failure
+ */
+bool query(struct connection *conn, const char *fmt, ...);
+
+/* int accounts_get(MYSQL *sql, struct token *tok, char **buf); */
+/* int login(MYSQL *sql, struct token *tok, char **buf); */
+bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
+/* int pin_update(MYSQL *sql, struct token *tok, char **buf); */
+/* int transactions_get(char **buf); */
+/* int transfer(MYSQL *sql, struct token *tok, char **buf); */
+
+/* int iban_getcheck(const char *_iban); */
+/* bool iban_validate(const char *iban); */

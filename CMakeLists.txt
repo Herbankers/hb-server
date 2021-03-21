@@ -16,13 +16,11 @@ set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
 # OpenSSL
 find_package(OpenSSL REQUIRED)
 
-# cJSON
-find_package(msgpack REQUIRED)
-
 # pkgconfig packages
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ARGON2 REQUIRED libargon2)
 pkg_check_modules(MARIADB REQUIRED libmariadb)
+pkg_check_modules(MSGPACK REQUIRED msgpack)
 
 set(HEADERS
 	src/hbp.h
@@ -30,35 +28,33 @@ set(HEADERS
 )
 
 set(SOURCES
-	src/accounts.c
-	src/iban.c
+	#src/accounts.c
+	#src/iban.c
 	src/login.c
 	src/main.c
-	src/pin_update.c
+	#src/pin_update.c
 	src/session.c
-	src/transactions.c
-	src/transfer.c
+	#src/transactions.c
+	#src/transfer.c
 )
 
 add_executable(${PROJECT_NAME}
 	${HEADERS}
 	${SOURCES}
 )
-
 target_link_libraries(${PROJECT_NAME}
 	${ARGON2_LINK_LIBRARIES}
 	${MARIADB_LINK_LIBRARIES}
-	# I don't understand why the below doesn't work but oh well
-	#${ARGON2_LIBRARIES}
-	#${MARIADB_LIBRARIES}
+	${MSGPACK_LINK_LIBRARIES}
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
 	${ARGON2_INCLUDE_DIRS}
 	${MARIADB_INCLUDE_DIRS}
-	${MSGPACK_INCLUDE_DIR}
+	${MSGPACK_INCLUDE_DIRS}
 	${OPENSSL_INCLUDE_DIR}
 )
 target_compile_options(${PROJECT_NAME} PUBLIC
 	${ARGON2_CFLAGS_OTHER}
 	${MARIADB_CFLAGS_OTHER}
+	${MSGPACK_CFLAGS_OTHER}
 )

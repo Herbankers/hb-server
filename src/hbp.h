@@ -29,24 +29,17 @@
 
 #include <stdint.h>
 
-/*
- * General
- */
-
 /** @brief Version of the HBP protocol */
 #define HBP_VERSION	1
+/** @brief Magic number */
+#define HBP_MAGIC	0x4B9A208E
 /** @brief Default port on which hb-server is hosted */
 #define HBP_PORT	8420
-
-
-/*
- * Limits
- */
 
 /** @brief Maximum number of erroneous requests before closing the connection */
 #define HBP_ERROR_MAX	10
 /** @brief Maximum request/reply data length in bytes */
-#define HBP_LENGTH_MAX	8192
+#define HBP_LENGTH_MAX	32768
 /** @brief Minimum length for an IBAN (per ISO 13616-1:2007) */
 #define HBP_IBAN_MIN	9
 /** @brief Maximum length for an IBAN (per ISO 13616-1:2007) */
@@ -58,11 +51,28 @@
 /** @brief Maximum times PIN entry can be attempted before blocking the card */
 #define HBP_PINTRY_MAX	3
 /** @brief Session timeout in seconds */
-#define HBP_TIMEOUT	(10 * 60)
-/** @brief Card UI length in bytes */
-#define HBP_UID_MAX	6
+#define HBP_TIMEOUT	(5 * 60)
+/** @brief Card ID length in bytes (excluding null character) */
+#define HBP_CID_MAX	6
 
-/** @brief Requests types */
+/**
+ * @brief Request and reply header
+ *
+ * This structure leads the msgpack data and specifies the version of HBP used (to check compatiblity), the size of the
+ * following data and the type of request/reply.
+ */
+struct hbp_header {
+	/** @brief Magic number (see #HBP_MAGIC) */
+	uint32_t	magic;
+	/** @brief Protocol version (see #HBP_VERSION) */
+	uint8_t		version;
+	/** @brief Request type (see #hbp_request_t) or Reply type (see #hbp_reply_t) */
+	uint8_t		type;
+	/** @brief Length of the following msgpack data (may not exceed #HBP_LENGTH_MAX bytes) */
+	uint16_t	length;
+} __attribute__((packed));
+
+/** @brief Types of requests */
 typedef enum {
 	/**
 	 * @brief Request to start a new session
@@ -71,8 +81,12 @@ typedef enum {
 	 * or sending more than #HBP_ERROR_MAX invalid requests will also end an active session.
 	 * Only one session per connection is possible.
 	 *
+	 * @param card_id The bank card's unique IDentifier (max. #HBP_CID_MAX + 1 bytes)
+	 * @param pin The PIN code associated with the card ID (min. #HBP_PIN_MIN and max. #HBP_PIN_MAX + 1 bytes)
+	 *
+	 * @todo Have a cooldown period on logins to prevent brute forcing
 	 */
-	HBP_REQ_LOGIN,
+	HBP_REQ_LOGIN = 0,
 
 	/**
 	 * @brief Request to terminate the current session
@@ -82,28 +96,33 @@ typedef enum {
 	HBP_REQ_LOGOUT,
 
 	/**
-	 * @brief Not yet implemented
+	 * @brief Request for user information associated with the current session
 	 *
+	 * Not yet implemented
 	 * TODO
 	 */
 	HBP_REQ_INFO,
 
 	/**
-	 * @brief Not yet implemented
+	 * @brief Request for the balance of the account associated with the current session
 	 *
+	 * Not yet implemented
 	 * TODO
 	 */
 	HBP_REQ_BALANCE,
 
 	/**
-	 * @brief Not yet implemented
+	 * @brief Request to transfer, withdraw or deposit money from/to the account associated with the current session
 	 *
+	 * Not yet implemented
 	 * TODO
 	 */
 	HBP_REQ_TRANSFER
 } hbp_request_t;
 
-/** @brief Reply types */
+/**
+ * @brief Types of replies
+ */
 typedef enum {
 	/**
 	 * @brief Reply to a request for a new session
@@ -111,64 +130,75 @@ typedef enum {
 	 * For the request associated with this reply, see #HBP_REQ_LOGIN
 	 *
 	 * @param type HBP_REP_LOGIN
-	 * @param status See #hbp_login_t
+	 * @param status See #hbp_login_status_t
 	 */
-	HBP_REP_LOGIN,
+	HBP_REP_LOGIN = 128,
 
 	/**
-	 * @brief Reply to a request to logout (also sent when the connection is about to be terminated unexpectedly)
+	 * @brief Reply to a request to logout (also sent when the session is about to be logged out of unexpectedly)
 	 *
 	 * For the request associated with this reply, see #HBP_REQ_LOGOUT
 	 *
+	 * This reply will also be sent if the session is about to be expired of if too many errornous
 	 * This reply may also be sent when either the server is about to be shut down or if the session has expired.
 	 *
-	 * @param reason See #hbp_term_t
+	 * @param reason See #hbp_term_reason_t
 	 */
 	HBP_REP_TERMINATED,
 
 	/**
-	 * @brief Not yet implemented
+	 * @brief Reply to a request Request for user information associated with the current session
 	 *
 	 * TODO
 	 */
 	HBP_REP_INFO,
 
 	/**
-	 * @brief Not yet implemented
+	 * @brief Reply to a request request for the balance of the account associated with the current session
 	 *
+	 * Not yet implemented
 	 * TODO
 	 */
 	HBP_REP_BALANCE,
 
 	/**
-	 * @brief Not yet implemented
+	 * @brief Reply to a request to request to transfer, withdraw or deposit money from/to the account associated
+	 *        with the current session
 	 *
+	 * Not yet implemented
 	 * TODO
 	 */
-	HBP_REP_TRANSFER
-};
+	HBP_REP_TRANSFER,
+
+	/**
+	 * @brief The server couldn't complete the request because of an error, check the server logs
+	 *
+	 * Instances where this reply may be sent:
+	 * - The server is out of memory
+	 * - An invalid request has been received
+	 */
+	HBP_REP_ERROR
+} hbp_reply_t;
 
 /** @brief Indicates whether the login failed or succeeded */
 typedef enum {
 	/** The login was successful */
 	HBP_LOGIN_GRANTED,
-	/** The card UID or PIN-code is incorrect */
+	/** The card ID or PIN-code is incorrect */
 	HBP_LOGIN_DENIED,
 	/** This card has been blocked because of a number of invalid logins */
-	HBP_LOGIN_BLOCKED,
-	/** The server couldn't complete the request because of an error, check the server logs */
-	HBP_LOGIN_ERROR
-} hbp_login_t;
+	HBP_LOGIN_BLOCKED
+} hbp_login_status_t;
 
-/** @brief Indicates why the session has ended */
+/** @brief Indicates why the session has ended/the server will disconnect */
 typedef enum {
 	/** The client has request to logout. Logout has succeeded */
 	HBP_TERM_LOGOUT,
 	/** The current session has expired because #HBP_TIMEOUT has been reached */
 	HBP_TERM_EXPIRED,
-	/** The server couldn't complete the request because of an error, check the server logs */
-	HBP_TERM_ERROR
-} hbp_term_t;
+	/** The server has logged out your session because the server is about to shut down */
+	HBP_TERM_CLOSED
+} hbp_term_reason_t;
 
 #if 0
 /* Account types */

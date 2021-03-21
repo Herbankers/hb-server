@@ -61,7 +61,6 @@ SSL_CTX *ctx;
 char *sql_host, *sql_db, *sql_user, *sql_pass;
 uint16_t sql_port;
 
-/* logging print function */
 void lprintf(const char *fmt, ...)
 {
 	FILE *file = NULL;
@@ -94,8 +93,36 @@ void lprintf(const char *fmt, ...)
 	pthread_mutex_unlock(&log_lock);
 }
 
+bool query(struct connection *conn, const char *fmt, ...)
+{
+	va_list args;
+	char *query;
+
+	/* allocate memory for our query */
+	va_start(args, fmt);
+	if (!(query = malloc(vsnprintf(NULL, 0, fmt, args)))) {
+		lprintf("out of memory\n");
+		return false;
+	}
+
+	vsprintf(query, fmt, args);
+
+	va_end(args);
+
+	/* process the query */
+	if (mysql_query(conn->sql, query)) {
+		lprintf("%serror running query: %s\n", mysql_error(conn->sql));
+		return false;
+	}
+
+	free(query);
+
+	return true;
+}
+
 #if SSLSOCK
-static int ssl_initialize(void)
+/* load our CA, certificate and private key into memory */
+static bool ssl_initialize(void)
 {
 	const SSL_METHOD *met;
 
@@ -146,16 +173,39 @@ static int ssl_initialize(void)
 
 	lprintf("OpenSSL has been successfully initialized\n");
 
-	return 0;
+	return true;
 
 err:
 	ERR_print_errors_fp(stderr);
 	if (ctx)
 		SSL_CTX_free(ctx);
 
-	return -1;
+	return false;
 }
 #endif
+
+/* test if our MySQL credentials are valid */
+static bool mysql_test(void)
+{
+	MYSQL *sql;
+
+	/* intialize MySQL */
+	if (!(sql = mysql_init(NULL))) {
+		lprintf("mysql internal error\n");
+		return false;
+	}
+
+	/* test our MySQL username, password and if the database exists */
+	if (!mysql_real_connect(sql, sql_host, sql_user, sql_pass, sql_db, sql_port, NULL, 0)) {
+		lprintf("failed to connect to the database: %s\n", mysql_error(sql));
+		return false;
+	}
+
+	/* close the connection again, this was just a test */
+	mysql_close(sql);
+
+	return true;
+}
 
 /*
  * TODO Handle SIGNALS for server termination, like waiting for clients to
@@ -163,41 +213,31 @@ err:
  *
  * e.g. send all clients a that their session has terminated (HBP_REP_LOGOUT)
  */
-static int run(void)
+static bool run(void)
 {
 	struct sockaddr_in6 server;
 	pthread_t thread;
 	int sock, csock, on = 1;
 
-	/* intialize MySQL */
-	mysql_library_init(0, 0, NULL);
-
-	if (!(sql = mysql_init(NULL))) {
-		lprintf("mysql internal error\n");
-		return -1;
-	}
-
-	/* test our MySQL username, password and if the database exists */
-	if (!mysql_real_connect(sql, sql_host, sql_user, sql_pass, sql_db, sql_port, NULL, 0)) {
-		lprintf("database connection error\n");
-		return -1;
-	}
-
 #if SSLSOCK
-	if (ssl_initialize() < 0)
-		return -1;
+	if (!ssl_initialize())
+		return false;
 #endif
+
+	/* test if our MySQL details are working */
+	if (!mysql_test())
+		return false;
 
 	/* create the socket */
 	if ((sock = socket(PF_INET6, SOCK_STREAM, 0)) < 0) {
 		lprintf("unable to create socket: %s\n", strerror(errno));
-		return -1;
+		return false;
 	}
 
 	/* allow socket to be reused */
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) < 0) {
 		lprintf("%s\n", strerror(errno));
-		return -1;
+		return false;
 	}
 
 	/* bind the socket */
@@ -208,13 +248,13 @@ static int run(void)
 	lprintf(" Binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
 		lprintf("unable to bind socket: %s\n", strerror(errno));
-		return -1;
+		return false;
 	}
 
 	lprintf(" Listening for connections...\n");
 	if (listen(sock, SOMAXCONN) < 0) {
 		lprintf("%s\n", strerror(errno));
-		return -1;
+		return false;
 	}
 
 	/* listen for clients */
@@ -231,7 +271,7 @@ static int run(void)
 		}
 	}
 
-	return 0;
+	return true;
 }
 
 static void usage(char *prog)
@@ -275,6 +315,8 @@ int main(int argc, char **argv)
 {
 	char *s;
 	int c;
+
+	mysql_library_init(0, 0, NULL);
 
 	/* parse command-line arguments */
 	while ((c = getopt(argc, argv, "P:"
@@ -379,7 +421,7 @@ int main(int argc, char **argv)
 
 	/* set defaults in case the user hasn't specified these */
 	if (!port[0])
-		sprintf(port, "%d", KBP_PORT);
+		sprintf(port, "%d", HBP_PORT);
 
 	if (!sql_host) {
 		s = "localhost";
@@ -409,7 +451,7 @@ int main(int argc, char **argv)
 	lprintf("Copyright (C) 2021 Herbank Server v1.0\n");
 	lprintf("The server will be hosted on port %s\n", port);
 
-	if (run() < 0)
+	if (!run())
 		goto err;
 
 	finalize();

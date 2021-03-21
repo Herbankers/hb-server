@@ -33,31 +33,37 @@
 #include "hbp.h"
 #include "herbank.h"
 
-static int attempts_update(MYSQL *sql, uint32_t user_id, uint32_t card_id, bool success)
+bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
-	char *_q, *q = NULL;
+	reply->type = HBP_REP_LOGIN;
 
-	/* Prepare the query to update/reset the number of attempts made */
+	lprintf("loggin in my brother");
+
+	return true;
+
+#if 0
+	msgpack_unpacked unpack;
+	bool res;
+
+	if (!msgpack_unpacker_init(&unpack, len))
+		return NULL;
+
+	/* update the attempts */
 	if (success)
-		_q = "UPDATE `cards` SET `attempts` = 0 WHERE `user_id` = %u AND `card_id` = %u";
+		/* res = query(conn, "UPDATE `cards` SET `attempts` = 0 "
+				"WHERE `user_id` = %u AND `card_id` = %u", conn->user_id, conn->card_id); */
 	else
-		_q = "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `user_id` = %u AND `card_id` = %u";
-	if (!(q = malloc(snprintf(NULL, 0, _q, user_id, card_id) + 1)))
-		goto err;
-	sprintf(q, _q, user_id, card_id);
+		/* res = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 "
+				"WHERE `user_id` = %u AND `card_id` = %u", conn->user_id, conn->card_id); */
 
-	/* Run it */
-	if (mysql_query(sql, q))
-		goto err;
+	if (!res)
+		return NULL;
 
-	free(q);
-	return 1;
-
-err:
-	free(q);
-	return 0;
+	msgpack_unpacker_destroy(&unpack);
+#endif
 }
 
+#if 0
 int login(MYSQL *sql, struct token *tok, char **buf)
 {
 	struct kbp_request_login l;
@@ -129,3 +135,4 @@ err:
 	mysql_free_result(res);
 	return -1;
 }
+#endif
