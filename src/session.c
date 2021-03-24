@@ -35,12 +35,10 @@
 #if SSLSOCK
 #  include <openssl/err.h>
 #  include <openssl/ssl.h>
-
 #  define READ(b, n)	SSL_read(conn->ssl, (b), (n))
 #  define WRITE(b, n)	SSL_write(conn->ssl, (b), (n))
 #else
 #  include <errno.h>
-
 #  define READ(b, n)	read(conn->socket, (b), (n))
 #  define WRITE(b, n)	write(conn->socket, (b), (n))
 #endif
@@ -175,6 +173,7 @@ static bool verify(struct connection *conn)
 		return false;
 	}
 
+	/* FIXME this doesn't look like it's resolving the IP properly */
 	if (addr->ai_addr->sa_family == AF_INET)
 		inet_ntop(AF_INET, &((struct sockaddr_in *) &addr->ai_addr)->sin_addr.s_addr,
 				conn->host, INET_ADDRSTRLEN);
@@ -208,7 +207,7 @@ static bool verify(struct connection *conn)
 	}
 #endif
 
-	lprintf("%s: connected!\n", conn->host);
+	lprintf("%s: Client connected\n", conn->host);
 
 	return true;
 }
@@ -217,7 +216,7 @@ static bool verify(struct connection *conn)
 static bool sendreply(struct connection *conn, struct hbp_header *reply, const char *data)
 {
 	/* send the reply header */
-	if (WRITE(&reply, sizeof(struct hbp_header)) <= 0)
+	if (WRITE(reply, sizeof(struct hbp_header)) <= 0)
 		return false;
 
 	/* send the reply data */
@@ -233,25 +232,35 @@ static int receiverequest(struct connection *conn, struct hbp_header *request, c
 	int res;
 
 	/* wait for the client to send a request header */
-	if ((res = READ(&request, sizeof(struct hbp_header))) <= 0) {
+	if ((res = READ(request, sizeof(struct hbp_header))) <= 0) {
 #if SSLSOCK
 		if (SSL_get_error(ssl, res) == SSL_ERROR_ZERO_RETURN)
+			return -1;
+#else
+		if (!res)
 			return -1;
 #endif
 		return 0;
 	}
 
 	/* check if the header is valid and if a compatible HBP version is used by the client */
-	if (request->magic != HBP_MAGIC || request->length > HBP_LENGTH_MAX)
-		return 0;
+	if (request->magic != HBP_MAGIC || request->length > HBP_LENGTH_MAX) {
+		lprintf("%s: not a HBP packet, disconnecting...\n", conn->host);
+		return -1;
+	}
 	if (request->version != HBP_VERSION) {
-		lprintf("%s: HBP version mismatch (client has: %u, server wants %u)\n",
+		lprintf("%s: HBP version mismatch (client has: %u, server wants %u), disconnecting...\n",
 				conn->host, request->version, HBP_VERSION);
 		return -1;
 	}
 
-	/* TODO resolve to string */
-	lprintf("%s: request %u\n", conn->host, request->type);
+	for (int i = 0; reqrepmap[i].index != -1; i++) {
+		if (reqrepmap[i].index != request->type)
+			continue;
+
+		lprintf("%s: %s request\n", conn->host, reqrepmap[i].name);
+		break;
+	}
 
 	/* read request data (if available) */
 	if (request->length) {
@@ -308,12 +317,13 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 	}
 
 	/* copy the msgpack buffer to a newly allocated array to be returned */
-	if ((*reply_data = malloc(sbuf.size))) {
-		memcpy(*reply_data, sbuf.data, sbuf.size);
-		reply->length = sbuf.size;
-	} else {
+	if (!(*reply_data = malloc(sbuf.size))) {
 		lprintf("out of memory\n");
+		return false;
 	}
+
+	memcpy(*reply_data, sbuf.data, sbuf.size);
+	reply->length = sbuf.size;
 
 	return true;
 }
@@ -329,6 +339,7 @@ void *session(void *args)
 	reply.version = HBP_VERSION;
 
 	/* allocate initial buffers for reply and request data */
+	/* TODO */
 	request_data = malloc(128);
 	reply_data = malloc(128);
 
@@ -364,11 +375,13 @@ void *session(void *args)
 			/* success */
 			break;
 		case 0:
+			/* invalid request */
 			lprintf("%s: invalid request\n", conn.host);
 			conn.errcnt++;
 			continue;
 		case -1:
-			break;
+			/* disconnect */
+			goto ret;
 		}
 
 		/* process the client's request */
@@ -388,11 +401,17 @@ void *session(void *args)
 			continue;
 		}
 
-		lprintf("%s: request %u has been processed\n", conn.host, request.type);
+		for (int i = 0; reqrepmap[i].index != -1; i++) {
+			if (reqrepmap[i].index != reply.type)
+				continue;
+
+			lprintf("%s: %s reply\n", conn.host, reqrepmap[i].name);
+			break;
+		}
 	}
 
 ret:
-	lprintf("%s: connection has terminated\n", conn.host);
+	lprintf("%s: Client disconnected\n", conn.host);
 
 	/* free the reply and request data buffers */
 	free(request_data);

@@ -2,7 +2,7 @@
  *
  * hb-server
  *
- * Copyright (C) 2018 - 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+ * Copyright (C) 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,20 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 {
 	reply->type = HBP_REP_LOGIN;
 
-	lprintf("loggin in my brother");
+	//lprintf("loggin in my brother\n");
+
+	char buf[1289];
+	memcpy(buf, data, len);
+
+	lprintf("recv(%d): %s\n", len, buf);
+
+	msgpack_pack_array(pack, 2);
+
+	msgpack_pack_str(pack, 7);
+	msgpack_pack_str_body(pack, "bonjour", 7);
+
+	msgpack_pack_str(pack, 4);
+	msgpack_pack_str_body(pack, "test", 4);
 
 	return true;
 

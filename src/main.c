@@ -430,7 +430,7 @@ int main(int argc, char **argv)
 	}
 
 	if (!sql_db) {
-		s = "kech";
+		s = "herbankdb";
 		sql_db = malloc(strlen(s) + 1);
 		strcpy(sql_db, s);
 	}

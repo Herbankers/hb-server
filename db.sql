@@ -18,9 +18,7 @@ CREATE TABLE IF NOT EXISTS `accounts` (
 	`iban`			VARCHAR(34)		NOT NULL UNIQUE,
 	`type`			TINYINT UNSIGNED	NOT NULL,
 	`balance`		BIGINT			NOT NULL,
-	PRIMARY KEY (`iban`),
-	FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-		ON DELETE RESTRICT ON UPDATE CASCADE
+	PRIMARY KEY (`iban`)
 );
 
 CREATE TABLE IF NOT EXISTS `registrations` (

@@ -72,6 +72,28 @@ struct hbp_header {
 	uint16_t	length;
 } __attribute__((packed));
 
+static const struct {
+	int index;
+	const char *name;
+} reqrepmap[] = {
+	/* requests */
+	{ 0, "LOGIN" },
+	{ 1, "LOGOUT" },
+	{ 2, "INFO" },
+	{ 3, "BALANCE" },
+	{ 4, "TRANSFER" },
+
+	/* replies */
+	{ 128, "LOGIN" },
+	{ 129, "TERMINATED" },
+	{ 130, "INFO" },
+	{ 131, "BALANCE" },
+	{ 132, "TRANSFER" },
+	{ 133, "ERROR" },
+
+	{ -1, NULL }
+};
+
 /** @brief Types of requests */
 typedef enum {
 	/**
