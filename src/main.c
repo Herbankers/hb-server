@@ -436,13 +436,13 @@ int main(int argc, char **argv)
 	}
 
 	if (!sql_user) {
-		s = "root";
+		s = "hb-server";
 		sql_user = malloc(strlen(s) + 1);
 		strcpy(sql_user, s);
 	}
 
 	if (!sql_pass) {
-		s = "";
+		s = "password";
 		sql_pass = malloc(strlen(s) + 1);
 		strcpy(sql_pass, s);
 	}
