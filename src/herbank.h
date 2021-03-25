@@ -112,9 +112,9 @@ void *session(void *args);
  * @param fmt Specifies how subsequent arguments are converted
  * @param ... Variable number of arguments
  *
- * @return True on success, False on failure
+ * @return A pointer to the MYSQL_RES result structure. NULL if an error occured.
  */
-bool query(struct connection *conn, const char *fmt, ...);
+MYSQL_RES *query(struct connection *conn, const char *fmt, ...);
 
 /* int accounts_get(MYSQL *sql, struct token *tok, char **buf); */
 /* int login(MYSQL *sql, struct token *tok, char **buf); */

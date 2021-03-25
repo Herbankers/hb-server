@@ -93,31 +93,39 @@ void lprintf(const char *fmt, ...)
 	pthread_mutex_unlock(&log_lock);
 }
 
-bool query(struct connection *conn, const char *fmt, ...)
+MYSQL_RES *query(struct connection *conn, const char *fmt, ...)
 {
+	MYSQL_RES *res;
 	va_list args;
 	char *query;
+	int n;
 
 	/* allocate memory for our query */
 	va_start(args, fmt);
-	if (!(query = malloc(vsnprintf(NULL, 0, fmt, args)))) {
+	n = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+
+	if (!(query = malloc(n))) {
 		lprintf("out of memory\n");
-		return false;
+		return NULL;
 	}
 
+	va_start(args, fmt);
 	vsprintf(query, fmt, args);
-
 	va_end(args);
 
 	/* process the query */
 	if (mysql_query(conn->sql, query)) {
-		lprintf("%serror running query: %s\n", mysql_error(conn->sql));
-		return false;
+		lprintf("%s: error running query: %s\n", conn->host, mysql_error(conn->sql));
+		return NULL;
 	}
+
+	if (!(res = mysql_store_result(conn->sql)))
+		return NULL;
 
 	free(query);
 
-	return true;
+	return res;
 }
 
 #if SSLSOCK
@@ -241,6 +249,7 @@ static bool run(void)
 	}
 
 	/* bind the socket */
+	/* FIXME why IPv6? */
 	server.sin6_family = AF_INET6;
 	server.sin6_addr = in6addr_any;
 	server.sin6_port = htons(strtol(port, NULL, 10));
@@ -251,7 +260,7 @@ static bool run(void)
 		return false;
 	}
 
-	lprintf(" Listening for connections...\n");
+	lprintf(" The server is listening on port %s...\n", port);
 	if (listen(sock, SOMAXCONN) < 0) {
 		lprintf("%s\n", strerror(errno));
 		return false;
@@ -449,7 +458,6 @@ int main(int argc, char **argv)
 
 	/* the exciting part, get everything started up */
 	lprintf("Copyright (C) 2021 Herbank Server v1.0\n");
-	lprintf("The server will be hosted on port %s\n", port);
 
 	if (!run())
 		goto err;

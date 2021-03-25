@@ -35,117 +35,84 @@
 
 bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
+	/* FIXME static buffer per thread (in struct connection) */
+	msgpack_unpacker unpack;
+	msgpack_unpacked unpacked;
+	msgpack_object *array;
+	char card_id[HBP_CID_MAX + 1], pin[HBP_PIN_MAX + 1];
+	MYSQL_ROW row;
+	MYSQL_RES *sqlres = NULL;
+
+	/* load the data into the msgpack buffer */
+	if (!msgpack_unpacker_init(&unpack, len))
+		return false;
+	memcpy(msgpack_unpacker_buffer(&unpack), data, len);
+	msgpack_unpacker_buffer_consumed(&unpack, len);
+
+	/* unpack the array */
+	msgpack_unpacked_init(&unpacked);
+	if (msgpack_unpacker_next(&unpack, &unpacked) != MSGPACK_UNPACK_SUCCESS)
+		goto err;
+	if (unpacked.data.type != MSGPACK_OBJECT_ARRAY || unpacked.data.via.array.size != HBP_REQ_LOGIN_PARAMS)
+		goto err;
+	array = unpacked.data.via.array.ptr;
+
+	/* copy the Card ID and PIN-code from the array to memory */
+	if (array[0].via.str.size > HBP_CID_MAX || array[1].via.str.size > HBP_PIN_MAX)
+		goto err;
+	memcpy(card_id, array[0].via.str.ptr, array[0].via.str.size);
+	card_id[array[0].via.str.size] = '\0';
+	memcpy(pin, array[1].via.str.ptr, array[1].via.str.size);
+	pin[array[1].via.str.size] = '\0';
+
+	/* check if the card ID from the request is in the database */
+	sqlres = query(conn, "SELECT `user_id`, `pin`, `attempts` FROM `cards` WHERE `card_id` = '%s'", card_id);
+	if (!(row = mysql_fetch_row(sqlres))) {
+		lprintf("%s: invalid card ID\n", conn->host);
+		goto err;
+	}
+
+	msgpack_unpacked_destroy(&unpacked);
+	msgpack_unpacker_destroy(&unpack);
+
+	/* @param type */
 	reply->type = HBP_REP_LOGIN;
 
-	//lprintf("loggin in my brother\n");
-
-	char buf[1289];
-	memcpy(buf, data, len);
-
-	lprintf("recv(%d): %s\n", len, buf);
-
-	msgpack_pack_array(pack, 2);
-
-	msgpack_pack_str(pack, 7);
-	msgpack_pack_str_body(pack, "bonjour", 7);
-
-	msgpack_pack_str(pack, 4);
-	msgpack_pack_str_body(pack, "test", 4);
-
-	return true;
-
-#if 0
-	msgpack_unpacked unpack;
-	bool res;
-
-	if (!msgpack_unpacker_init(&unpack, len))
-		return NULL;
-
-	/* update the attempts */
-	if (success)
-		/* res = query(conn, "UPDATE `cards` SET `attempts` = 0 "
-				"WHERE `user_id` = %u AND `card_id` = %u", conn->user_id, conn->card_id); */
-	else
-		/* res = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 "
-				"WHERE `user_id` = %u AND `card_id` = %u", conn->user_id, conn->card_id); */
-
-	if (!res)
-		return NULL;
-
-	msgpack_unpacker_destroy(&unpack);
-#endif
-}
-
-#if 0
-int login(MYSQL *sql, struct token *tok, char **buf)
-{
-	struct kbp_request_login l;
-	uint32_t user_id, card_id;
-	uint8_t *lres = NULL;
-	char *_q, *q = NULL;
-	MYSQL_RES *res = NULL;
-	MYSQL_ROW row;
-
-	memcpy(&l, *buf, sizeof(l));
-	free(*buf);
-	*buf = NULL;
-
-	/* extract card information from the database into memory */
-	_q = "SELECT `user_id`, `card_id`, `pin`, `attempts` FROM `cards` "
-			"WHERE SUBSTRING(HEX(`id`), 1, 12) = '%02x%02x%02x%02x%02x%02x'";
-	if (!(q = malloc(snprintf(NULL, 0, _q, l.uid[5], l.uid[4], l.uid[3], l.uid[2], l.uid[1], l.uid[0]) + 1)))
-		goto err;
-	sprintf(q, _q, l.uid[5], l.uid[4], l.uid[3], l.uid[2], l.uid[1], l.uid[0]);
-
-	if (mysql_query(sql, q))
-		goto err;
-	if (!(res = mysql_store_result(sql)))
-		goto err;
-
-	/* check if entry exists */
-	if (!(row = mysql_fetch_row(res)))
-		goto err;
-
-	/* allocate memory for the reply structure */
-	if (!(lres = malloc(1)))
-		goto err;
-	*buf = (char *) lres;
-
-	/* check if the card is blocked */
-	if (strtol(row[3], NULL, 10) >= KBP_PINTRY_MAX) {
-		*lres = KBP_L_BLOCKED;
+	/* check if this card is blocked */
+	if (strtol(row[2], NULL, 10) >= HBP_PINTRY_MAX) {
+		/* @param status */
+		msgpack_pack_int(pack, HBP_LOGIN_BLOCKED);
 	} else {
-		user_id = strtol(row[0], NULL, 10);
-		card_id = strtol(row[1], NULL, 10);
+		/* check if the supplied password is correct */
+		if (argon2id_verify(row[1], pin, strlen(pin)) == ARGON2_OK) {
+			/* right password, reset the login attempts counter */
+			query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `card_id` = '%s'", card_id);
 
-		/* check if the entered PIN is correct */
-		if (argon2i_verify(row[2], l.pin, strlen(KBP_PIN_MAX)) == ARGON2_OK) {
-			/* reset the blocked flag */
-			if (!attempts_update(sql, user_id, card_id, 1))
-				goto err;
+			/* and start a new session */
+			conn->logged_in = true;
+			conn->expiry_time = time(NULL) + HBP_TIMEOUT * 60;
+			conn->user_id = strtol(row[0], NULL, 10);
+			conn->card_id = strtol(row[1], NULL, 10);
 
-			tok->valid = 1;
-			tok->user_id = user_id;
-			tok->card_id = card_id;
-			tok->expiry_time = time(NULL) + KBP_TIMEOUT * 60;
-
-			*lres = KBP_L_GRANTED;
+			/* @param status */
+			msgpack_pack_int(pack, HBP_LOGIN_GRANTED);
 		} else {
-			/* login failed, increment failed login attempts */
-			if (!attempts_update(sql, user_id, card_id, 0))
-				goto err;
-			*lres = KBP_L_DENIED;
+			/* wrong password, increment the failed login attempts counter */
+			query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `card_id` = '%s'", card_id);
+
+			/* @param status */
+			msgpack_pack_int(pack, HBP_LOGIN_DENIED);
 		}
 	}
 
-	free(q);
-	mysql_free_result(res);
-	return 1;
+	mysql_free_result(sqlres);
+
+	return true;
 
 err:
-	free(lres);
-	free(q);
-	mysql_free_result(res);
-	return -1;
+	mysql_free_result(sqlres);
+	msgpack_unpacked_destroy(&unpacked);
+	msgpack_unpacker_destroy(&unpack);
+
+	return false;
 }
-#endif

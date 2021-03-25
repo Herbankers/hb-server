@@ -48,12 +48,12 @@
 #define HBP_PIN_MIN	4
 /** @brief Maximum length for a PIN (per ISO 9564-1:2011) */
 #define HBP_PIN_MAX	12
-/** @brief Maximum times PIN entry can be attempted before blocking the card */
+/** @brief Maximum times PIN entry can be attempted before the card will be automatically blocked */
 #define HBP_PINTRY_MAX	3
 /** @brief Session timeout in seconds */
 #define HBP_TIMEOUT	(5 * 60)
 /** @brief Card ID length in bytes (excluding null character) */
-#define HBP_CID_MAX	6
+#define HBP_CID_MAX	12
 
 /**
  * @brief Request and reply header
@@ -93,6 +93,9 @@ static const struct {
 
 	{ -1, NULL }
 };
+
+/* the number of parameters per request */
+#define HBP_REQ_LOGIN_PARAMS	2
 
 /** @brief Types of requests */
 typedef enum {
@@ -151,7 +154,6 @@ typedef enum {
 	 *
 	 * For the request associated with this reply, see #HBP_REQ_LOGIN
 	 *
-	 * @param type HBP_REP_LOGIN
 	 * @param status See #hbp_login_status_t
 	 */
 	HBP_REP_LOGIN = 128,

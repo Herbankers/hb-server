@@ -173,13 +173,11 @@ static bool verify(struct connection *conn)
 		return false;
 	}
 
-	/* FIXME this doesn't look like it's resolving the IP properly */
+	/* copy the IP to a new buffer */
 	if (addr->ai_addr->sa_family == AF_INET)
-		inet_ntop(AF_INET, &((struct sockaddr_in *) &addr->ai_addr)->sin_addr.s_addr,
-				conn->host, INET_ADDRSTRLEN);
+		inet_ntop(AF_INET, &((struct sockaddr_in *) addr->ai_addr)->sin_addr, conn->host, INET_ADDRSTRLEN);
 	else if (addr->ai_addr->sa_family == AF_INET6)
-		inet_ntop(AF_INET6, &((struct sockaddr_in6 *) &addr->ai_addr)->sin6_addr.s6_addr,
-				conn->host, INET6_ADDRSTRLEN);
+		inet_ntop(AF_INET6, &((struct sockaddr_in6 *) addr->ai_addr)->sin6_addr, conn->host, INET6_ADDRSTRLEN);
 
 	freeaddrinfo(addr);
 
@@ -304,6 +302,7 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 		case HBP_REQ_LOGIN:
 			if (!login(conn, request_data, request->length, reply, &pack))
 				return false;
+
 			break;
 		case HBP_REQ_LOGOUT:
 			break;

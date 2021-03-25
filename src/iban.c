@@ -34,22 +34,28 @@
 
 static const uint8_t prefix_fmt = 0xCF /* 0b11001111 */;
 
-/* Calculate check digits (conforming to ISO 7064:2003) */
+/*
+ * calculation used: https://www.ibancalculator.com/calculation.html
+ */
+
+/* UNUSED */
+
+/* calculate check digits (conforming to ISO 7064:2003) */
 int iban_getcheck(const char *_iban)
 {
-	char iban[KBP_IBAN_MAX], buf[5];
+	char iban[HBP_IBAN_MAX], buf[5];
 	unsigned int i;
 	int n, check = 0;
 
-	strncpy(iban, _iban, KBP_IBAN_MAX);
+	strncpy(iban, _iban, HBP_IBAN_MAX);
 
-	/* Move the first 4 characters to the end of the string */
+	/* move the first 4 characters to the end of the string */
 	strncpy(buf, iban, 4);
 	buf[4] = '\0';
 	memmove(iban, iban + 4, strlen(iban + 4) + 1);
 	strcat(iban, buf);
 
-	/* Perform MOD 97 on all characters */
+	/* perform MOD 97 on all characters */
 	for (i = 0; i < strlen(iban); i++) {
 		if (isdigit(iban[i])) {
 			n = iban[i] - '0';
@@ -68,11 +74,8 @@ int iban_getcheck(const char *_iban)
 		check = (check * 10 + n) % 97;
 	}
 
-	/* Return a boolean value if validating, return checksum otherwise */
-	if (iban[2] == '0' && iban[3] == '0')
-		return 98 - check;
-	else
-		return check == 1;
+	/* return the checksum */
+	return 98 - check;
 }
 
 bool iban_validate(const char *iban)
@@ -80,12 +83,12 @@ bool iban_validate(const char *iban)
 	unsigned int i;
 	int l;
 
-	/* Check length IBAN */
+	/* check length IBAN */
 	l = strlen(iban);
-	if (l < KBP_IBAN_MIN || l > KBP_IBAN_MAX)
+	if (l < HBP_IBAN_MIN || l > HBP_IBAN_MAX)
 		return 0;
 
-	/* Check prefix format */
+	/* check prefix format */
 	for (i = 0; i < 8; i++) {
 		if (prefix_fmt & (1 << (7 - i))) {
 			if (!isalpha(iban[i]))
@@ -96,11 +99,11 @@ bool iban_validate(const char *iban)
 		}
 	}
 
-	/* Check BBAN format */
+	/* check BBAN format */
 	for (i = 8; i < strlen(iban); i++)
 		if (!isdigit(iban[i]))
 			return 0;
 
-	/* Validate IBAN checksum */
+	/* validate IBAN checksum */
 	return iban_getcheck(iban);
 }
