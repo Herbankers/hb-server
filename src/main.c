@@ -75,9 +75,10 @@ void lprintf(const char *fmt, ...)
 		t = time(NULL);
 		tm = localtime(&t);
 
-		va_start(args, fmt);
 		fprintf(file, "[%04d-%02d-%02d %02d:%02d:%02d] ", 1900 + tm->tm_year, tm->tm_mon, tm->tm_mday,
 				tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+		va_start(args, fmt);
 		vfprintf(file, fmt, args);
 		va_end(args);
 

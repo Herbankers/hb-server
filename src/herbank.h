@@ -58,6 +58,7 @@ struct connection {
 
 	bool		logged_in;
 	time_t		expiry_time;
+	char		iban[HBP_IBAN_MAX + 1];
 	uint32_t	user_id;
 	uint32_t	card_id;
 };

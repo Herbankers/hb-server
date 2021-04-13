@@ -52,7 +52,7 @@
 #define HBP_PINTRY_MAX	3
 /** @brief Session timeout in seconds */
 #define HBP_TIMEOUT	(5 * 60)
-/** @brief Card ID length in bytes (excluding null character) */
+/** @brief Card ID length in bytes */
 #define HBP_CID_MAX	12
 
 /**
@@ -94,9 +94,6 @@ static const struct {
 	{ -1, NULL }
 };
 
-/* the number of parameters per request */
-#define HBP_REQ_LOGIN_PARAMS	2
-
 /** @brief Types of requests */
 typedef enum {
 	/**
@@ -107,7 +104,10 @@ typedef enum {
 	 * Only one session per connection is possible.
 	 *
 	 * @param card_id The bank card's unique IDentifier (max. #HBP_CID_MAX + 1 bytes)
+	 * @param iban The bank account number (min. #HBP_IBAN_MIN and max. #HBP_IBAN_MAX bytes)
 	 * @param pin The PIN code associated with the card ID (min. #HBP_PIN_MIN and max. #HBP_PIN_MAX + 1 bytes)
+	 *
+	 * Number of parameters: #HBP_REQ_LOGIN_PARAMS
 	 *
 	 * @todo Have a cooldown period on logins to prevent brute forcing
 	 */
@@ -144,6 +144,14 @@ typedef enum {
 	 */
 	HBP_REQ_TRANSFER
 } hbp_request_t;
+
+/** @brief Parameters included in login request */
+typedef enum {
+	HBP_REQ_LOGIN_CARD_ID,
+	HBP_REQ_LOGIN_IBAN,
+	HBP_REQ_LOGIN_PIN,
+	HBP_REQ_LOGIN_LENGTH
+} hbp_req_login_params_t;
 
 /**
  * @brief Types of replies
@@ -212,7 +220,7 @@ typedef enum {
 	HBP_LOGIN_DENIED,
 	/** This card has been blocked because of a number of invalid logins */
 	HBP_LOGIN_BLOCKED
-} hbp_login_status_t;
+} hbp_rep_login_status_t;
 
 /** @brief Indicates why the session has ended/the server will disconnect */
 typedef enum {
@@ -222,7 +230,7 @@ typedef enum {
 	HBP_TERM_EXPIRED,
 	/** The server has logged out your session because the server is about to shut down */
 	HBP_TERM_CLOSED
-} hbp_term_reason_t;
+} hbp_rep_term_reason_t;
 
 #if 0
 /* Account types */

@@ -46,115 +46,6 @@
 #include "hbp.h"
 #include "herbank.h"
 
-#if 0
-static int process(MYSQL *sql, char **buf, char *host, struct kbp_request *req,
-		struct token *tok, struct kbp_reply *rep)
-{
-	struct kbp_request_transfer t;
-	int res;
-
-	/* Check if session hasn't timed out */
-	if (tok->valid) {
-		if (time(NULL) > tok->expiry_time) {
-			lprintf("%s: session timeout: %u,%u\n", host, tok->user_id, tok->card_id);
-
-			tok->valid = 0;
-			rep->status = KBP_S_TIMEOUT;
-			rep->length = 0;
-			return 0;
-		} else {
-			rep->status = KBP_S_INVALID;
-		}
-	} else if (req->type != KBP_T_LOGIN) {
-		rep->status = KBP_S_TIMEOUT;
-		rep->length = 0;
-		return 0;
-	}
-
-	/* Process the request */
-	switch (req->type) {
-	case KBP_T_ACCOUNTS:
-		if ((res = accounts_get(sql, tok, buf)) < 0)
-			rep->status = KBP_S_FAIL;
-		else
-			rep->status = KBP_S_OK;
-		break;
-	case KBP_T_PIN_UPDATE:
-		if (req->length != KBP_PIN_MAX + 1) {
-			rep->status = KBP_S_INVALID;
-			break;
-		}
-
-		if ((res = pin_update(sql, tok, buf)) < 0)
-			rep->status = KBP_S_FAIL;
-		else
-			rep->status = KBP_S_OK;
-		break;
-	case KBP_T_LOGIN:
-		if (req->length != sizeof(struct kbp_request_login)) {
-			rep->status = KBP_S_INVALID;
-			break;
-		}
-
-		if ((res = login(sql, tok, buf)) < 0) {
-			rep->status = KBP_S_FAIL;
-		} else {
-			if ((kbp_login_res) **buf == KBP_L_GRANTED)
-				lprintf("%s: session login: %u,%u\n", host,
-						tok->user_id, tok->card_id);
-
-			rep->status = KBP_S_OK;
-		}
-		break;
-	case KBP_T_LOGOUT:
-		if (tok->valid)
-			lprintf("%s: session logout: %u,%u\n", host,
-					tok->user_id, tok->card_id);
-
-		tok->valid = 0;
-		rep->status = KBP_S_TIMEOUT;
-		res = 0;
-		break;
-	case KBP_T_TRANSACTIONS:
-		if (req->length != KBP_IBAN_MAX + 1) {
-			rep->status = KBP_S_INVALID;
-			break;
-		}
-
-		if ((res = transactions_get(buf)) < 0)
-			rep->status = KBP_S_FAIL;
-		else
-			rep->status = KBP_S_OK;
-		break;
-	case KBP_T_TRANSFER:
-		if (req->length != sizeof(struct kbp_request_transfer)) {
-			rep->status = KBP_S_INVALID;
-			break;
-		}
-		memcpy(&t, *buf, req->length);
-
-		if ((res = transfer(sql, tok, buf)) < 0) {
-			rep->status = KBP_S_FAIL;
-		} else {
-			lprintf("%s: transfer from '%s' to '%s': EUR %.2f\n",
-					host, t.iban_src, t.iban_dest,
-					(double) t.amount / 100);
-
-			rep->status = KBP_S_OK;
-		}
-		break;
-	/* Invalid or unimplemented request */
-	default:
-		res = 0;
-		break;
-	}
-
-	rep->length = (res < 0) ? 0 : res;
-
-	return 1;
-}
-#endif
-
 /* connect to the client and verify the client certificate */
 static bool verify(struct connection *conn)
 {
@@ -290,21 +181,46 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 
 	/* check if the session hasn't timed out */
 	if (conn->logged_in && time(NULL) > conn->expiry_time) {
-		lprintf("%s: session timeout: user%u, card%u\n", conn->host, conn->user_id, conn->card_id);
+		/* log out if the session has timed out */
+		lprintf("%s: session timeout: %s (u %u, c %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
 
 		/* reply header */
 		reply->type = HBP_REP_TERMINATED;
 
 		/* @param reason */
-		msgpack_pack_uint8(&pack, HBP_TERM_EXPIRED);
+		msgpack_pack_int(&pack, HBP_TERM_EXPIRED);
 	} else {
 		switch (request->type) {
 		case HBP_REQ_LOGIN:
+			if (conn->logged_in)
+				return false;
+
 			if (!login(conn, request_data, request->length, reply, &pack))
 				return false;
 
+			if (conn->logged_in)
+				lprintf("%s: session login: %s (u %u, c %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
+
 			break;
 		case HBP_REQ_LOGOUT:
+			if (!conn->logged_in)
+				return false;
+
+			conn->logged_in = false;
+
+			lprintf("%s: session logout: %s (u %u, c %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
+
+			/* clear all other variables for security */
+			conn->expiry_time = 0;
+			conn->user_id = 0;
+			conn->card_id = 0;
+
+			/* reply header */
+			reply->type = HBP_REP_TERMINATED;
+
+			/* @param reason */
+			msgpack_pack_int(&pack, HBP_TERM_LOGOUT);
+
 			break;
 		case HBP_REQ_INFO:
 		case HBP_REQ_BALANCE:

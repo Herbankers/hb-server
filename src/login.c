@@ -35,38 +35,64 @@
 
 bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
-	/* FIXME static buffer per thread (in struct connection) */
 	msgpack_unpacker unpack;
 	msgpack_unpacked unpacked;
 	msgpack_object *array;
-	char card_id[HBP_CID_MAX + 1], pin[HBP_PIN_MAX + 1];
+	char card_id[HBP_CID_MAX * 2 + 1], iban[HBP_IBAN_MAX + 1], pin[HBP_PIN_MAX + 1];
 	MYSQL_ROW row;
 	MYSQL_RES *sqlres = NULL;
 
-	/* load the data into the msgpack buffer */
 	if (!msgpack_unpacker_init(&unpack, len))
 		return false;
+
+	/* adjust the buffer size if needed */
+	if (msgpack_unpacker_buffer_capacity(&unpack) < len) {
+		if (!msgpack_unpacker_reserve_buffer(&unpack, len)) {
+			msgpack_unpacker_destroy(&unpack);
+			return false;
+		}
+	}
+
+	/* copy request data into the msgpack buffer */
 	memcpy(msgpack_unpacker_buffer(&unpack), data, len);
 	msgpack_unpacker_buffer_consumed(&unpack, len);
 
-	/* unpack the array */
+	/* unpack the request array */
 	msgpack_unpacked_init(&unpacked);
 	if (msgpack_unpacker_next(&unpack, &unpacked) != MSGPACK_UNPACK_SUCCESS)
 		goto err;
-	if (unpacked.data.type != MSGPACK_OBJECT_ARRAY || unpacked.data.via.array.size != HBP_REQ_LOGIN_PARAMS)
+	if (unpacked.data.type != MSGPACK_OBJECT_ARRAY || unpacked.data.via.array.size != HBP_REQ_LOGIN_LENGTH)
 		goto err;
 	array = unpacked.data.via.array.ptr;
 
-	/* copy the Card ID and PIN-code from the array to memory */
-	if (array[0].via.str.size > HBP_CID_MAX || array[1].via.str.size > HBP_PIN_MAX)
+	/* Card ID */
+	if (array[HBP_REQ_LOGIN_CARD_ID].via.str.size > HBP_CID_MAX)
 		goto err;
-	memcpy(card_id, array[0].via.str.ptr, array[0].via.str.size);
-	card_id[array[0].via.str.size] = '\0';
-	memcpy(pin, array[1].via.str.ptr, array[1].via.str.size);
-	pin[array[1].via.str.size] = '\0';
+	memset(card_id, '0', HBP_CID_MAX * 2);
+	memcpy(card_id, array[HBP_REQ_LOGIN_CARD_ID].via.str.ptr, array[HBP_REQ_LOGIN_CARD_ID].via.str.size);
+	card_id[HBP_CID_MAX * 2] = '\0';
+
+	/* IBAN */
+	if (array[HBP_REQ_LOGIN_IBAN].via.str.size < HBP_IBAN_MIN || array[HBP_REQ_LOGIN_IBAN].via.str.size > HBP_IBAN_MAX)
+		goto err;
+	memcpy(iban, array[HBP_REQ_LOGIN_IBAN].via.str.ptr, array[1].via.str.size);
+	iban[array[HBP_REQ_LOGIN_IBAN].via.str.size] = '\0';
+
+	/* PIN */
+	if (array[HBP_REQ_LOGIN_PIN].via.str.size > HBP_PIN_MAX)
+		goto err;
+	memcpy(pin, array[HBP_REQ_LOGIN_PIN].via.str.ptr, array[HBP_REQ_LOGIN_PIN].via.str.size);
+	pin[array[HBP_REQ_LOGIN_PIN].via.str.size] = '\0';
+
+	/*
+	 * TODO Also check IBAN
+	 *
+	 * We don't need to do this right now, but this is for future proofing, when we'll be connecting to
+	 * the other teams' servers.
+	 */
 
 	/* check if the card ID from the request is in the database */
-	sqlres = query(conn, "SELECT `user_id`, `pin`, `attempts` FROM `cards` WHERE `card_id` = '%s'", card_id);
+	sqlres = query(conn, "SELECT `user_id`, `pin`, `attempts` FROM `cards` WHERE `card_id` = x'%s'", card_id);
 	if (!(row = mysql_fetch_row(sqlres))) {
 		lprintf("%s: invalid card ID\n", conn->host);
 		goto err;
@@ -86,11 +112,12 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		/* check if the supplied password is correct */
 		if (argon2id_verify(row[1], pin, strlen(pin)) == ARGON2_OK) {
 			/* right password, reset the login attempts counter */
-			query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `card_id` = '%s'", card_id);
+			query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `card_id` = x'%s'", card_id);
 
 			/* and start a new session */
 			conn->logged_in = true;
-			conn->expiry_time = time(NULL) + HBP_TIMEOUT * 60;
+			conn->expiry_time = time(NULL) + HBP_TIMEOUT;
+			strcpy(conn->iban, iban);
 			conn->user_id = strtol(row[0], NULL, 10);
 			conn->card_id = strtol(row[1], NULL, 10);
 
@@ -98,7 +125,7 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 			msgpack_pack_int(pack, HBP_LOGIN_GRANTED);
 		} else {
 			/* wrong password, increment the failed login attempts counter */
-			query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `card_id` = '%s'", card_id);
+			query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `card_id` = x'%s'", card_id);
 
 			/* @param status */
 			msgpack_pack_int(pack, HBP_LOGIN_DENIED);
