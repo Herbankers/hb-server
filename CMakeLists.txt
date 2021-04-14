@@ -30,10 +30,11 @@ set(HEADERS
 set(SOURCES
 	#src/accounts.c
 	#src/iban.c
+	src/info.c
 	src/login.c
+	src/session.c
 	src/main.c
 	#src/pin_update.c
-	src/session.c
 	#src/transactions.c
 	#src/transfer.c
 )

@@ -190,6 +190,9 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 		/* @param reason */
 		msgpack_pack_int(&pack, HBP_TERM_EXPIRED);
 	} else {
+		/* TODO instead maintain a struct of request handlers and call then appropriately
+		 * (to avoid having to use a switch here)
+		 */
 		switch (request->type) {
 		case HBP_REQ_LOGIN:
 			if (conn->logged_in)
@@ -208,24 +211,33 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 				return false;
 
 			conn->logged_in = false;
-
-			iprintf("%s: Session logout: %s (User %u, Card %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
-
 			/* clear all other variables for security */
 			conn->expiry_time = 0;
 			conn->user_id = 0;
 			conn->card_id = 0;
 
-			/* reply header */
-			reply->type = HBP_REP_TERMINATED;
+			iprintf("%s: Session logout: %s (User %u, Card %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
 
+			/* also send an appropriate reply to the client that it's been logged out */
+			reply->type = HBP_REP_TERMINATED;
 			/* @param reason */
 			msgpack_pack_int(&pack, HBP_TERM_LOGOUT);
 
 			break;
 		case HBP_REQ_INFO:
+			if (!conn->logged_in)
+				return false;
+
+			if (!info(conn, request_data, request->length, reply, &pack))
+				return false;
+
+			break;
 		case HBP_REQ_BALANCE:
+			if (!conn->logged_in)
+				return false;
 		case HBP_REQ_TRANSFER:
+			if (!conn->logged_in)
+				return false;
 		/* invalid request */
 		default:
 			return false;
@@ -255,7 +267,6 @@ void *session(void *args)
 	reply.version = HBP_VERSION;
 
 	/* allocate initial buffers for reply and request data */
-	/* TODO */
 	request_data = malloc(128);
 	reply_data = malloc(128);
 
@@ -327,6 +338,7 @@ void *session(void *args)
 	}
 
 ret:
+	/* TODO !!! XXX logout sessions before disconnect */
 	dprintf("%s: Client disconnected\n", conn.host);
 
 	/* free the reply and request data buffers */

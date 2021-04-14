@@ -127,6 +127,7 @@ MYSQL_RES *query(struct connection *conn, const char *fmt, ...);
 /* int accounts_get(MYSQL *sql, struct token *tok, char **buf); */
 /* int login(MYSQL *sql, struct token *tok, char **buf); */
 bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
+bool info(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
 /* int pin_update(MYSQL *sql, struct token *tok, char **buf); */
 /* int transactions_get(char **buf); */
 /* int transfer(MYSQL *sql, struct token *tok, char **buf); */

@@ -39,7 +39,7 @@
 /** @brief Maximum number of erroneous requests before closing the connection */
 #define HBP_ERROR_MAX	10
 /** @brief Maximum request/reply data length in bytes */
-#define HBP_LENGTH_MAX	32768
+#define HBP_LENGTH_MAX	1024
 /** @brief Minimum length for an IBAN (per ISO 13616-1:2007) */
 #define HBP_IBAN_MIN	9
 /** @brief Maximum length for an IBAN (per ISO 13616-1:2007) */
@@ -107,7 +107,8 @@ typedef enum {
 	 * @param iban The bank account number (min. #HBP_IBAN_MIN and max. #HBP_IBAN_MAX bytes)
 	 * @param pin The PIN code associated with the card ID (min. #HBP_PIN_MIN and max. #HBP_PIN_MAX + 1 bytes)
 	 *
-	 * Number of parameters: #HBP_REQ_LOGIN_PARAMS
+	 * @sa The reply associated with this request: #HBP_REP_LOGIN
+	 * @sa An enumeration of parameters: #hbp_req_login_params_t
 	 *
 	 * @todo Have a cooldown period on logins to prevent brute forcing
 	 */
@@ -117,14 +118,18 @@ typedef enum {
 	 * @brief Request to terminate the current session
 	 *
 	 * Logout of the current session. After this, a new session can be started again immediately.
+	 *
+	 * @sa The reply associated with this request: #HBP_REP_TERMINATED
 	 */
 	HBP_REQ_LOGOUT,
 
 	/**
 	 * @brief Request for user information associated with the current session
 	 *
-	 * Not yet implemented
-	 * TODO
+	 * Request the server to send information about the current session to the client. See the associated reply for
+	 * more information.
+	 *
+	 * @sa The reply associated with this request: #HBP_REP_INFO
 	 */
 	HBP_REQ_INFO,
 
@@ -133,6 +138,8 @@ typedef enum {
 	 *
 	 * Not yet implemented
 	 * TODO
+	 *
+	 * @sa The reply associated with this request: #HBP_REP_BALANCE
 	 */
 	HBP_REQ_BALANCE,
 
@@ -141,11 +148,13 @@ typedef enum {
 	 *
 	 * Not yet implemented
 	 * TODO
+	 *
+	 * @sa The reply associated with this request: #HBP_REP_TRANSFER
 	 */
 	HBP_REQ_TRANSFER
 } hbp_request_t;
 
-/** @brief Parameters included in login request */
+/** @brief Parameters included in #HBP_REQ_LOGIN */
 typedef enum {
 	HBP_REQ_LOGIN_CARD_ID,
 	HBP_REQ_LOGIN_IBAN,
@@ -160,28 +169,34 @@ typedef enum {
 	/**
 	 * @brief Reply to a request for a new session
 	 *
-	 * For the request associated with this reply, see #HBP_REQ_LOGIN
+	 * @param status See #hbp_rep_login_status_t
 	 *
-	 * @param status See #hbp_login_status_t
+	 * @sa The request associated with this reply: #HBP_REQ_LOGIN
 	 */
 	HBP_REP_LOGIN = 128,
 
 	/**
 	 * @brief Reply to a request to logout (also sent when the session is about to be logged out of unexpectedly)
 	 *
-	 * For the request associated with this reply, see #HBP_REQ_LOGOUT
-	 *
 	 * This reply will also be sent if the session is about to be expired of if too many errornous
 	 * This reply may also be sent when either the server is about to be shut down or if the session has expired.
 	 *
-	 * @param reason See #hbp_term_reason_t
+	 * @param reason See #hbp_rep_term_reason_t
+	 *
+	 * @sa A request that can be associated with this reply: #HBP_REQ_LOGOUT
 	 */
 	HBP_REP_TERMINATED,
 
 	/**
-	 * @brief Reply to a request Request for user information associated with the current session
+	 * @brief Reply to a request for user information associated with the current session
 	 *
-	 * TODO
+	 * This reply will return the name of the user who's currently logged in.
+	 *
+	 * @param first_name First name of the user who's currently logged in
+	 * @param last_name Last name of the user who's currently logged in
+	 *
+	 * @sa The request associated with this reply: #HBP_REQ_INFO
+	 * @sa An enumeration of parameters: #hbp_rep_info_params_t
 	 */
 	HBP_REP_INFO,
 
@@ -190,6 +205,8 @@ typedef enum {
 	 *
 	 * Not yet implemented
 	 * TODO
+	 *
+	 * @sa The request associated with this reply: #HBP_REQ_BALANCE
 	 */
 	HBP_REP_BALANCE,
 
@@ -199,6 +216,8 @@ typedef enum {
 	 *
 	 * Not yet implemented
 	 * TODO
+	 *
+	 * @sa The request associated with this reply: #HBP_REQ_TRANSFER
 	 */
 	HBP_REP_TRANSFER,
 
@@ -212,7 +231,7 @@ typedef enum {
 	HBP_REP_ERROR
 } hbp_reply_t;
 
-/** @brief Indicates whether the login failed or succeeded */
+/** @brief Indicates whether the login failed or succeeded in #HBP_REP_LOGIN */
 typedef enum {
 	/** The login was successful */
 	HBP_LOGIN_GRANTED,
@@ -222,7 +241,7 @@ typedef enum {
 	HBP_LOGIN_BLOCKED
 } hbp_rep_login_status_t;
 
-/** @brief Indicates why the session has ended/the server will disconnect */
+/** @brief Indicates why the session has ended/the server will disconnect in #HBP_REP_TERMINATED */
 typedef enum {
 	/** The client has request to logout. Logout has succeeded */
 	HBP_TERM_LOGOUT,
@@ -231,6 +250,13 @@ typedef enum {
 	/** The server has logged out your session because the server is about to shut down */
 	HBP_TERM_CLOSED
 } hbp_rep_term_reason_t;
+
+/** @brief Parameters included in #HBP_REP_INFO */
+typedef enum {
+	HBP_REQ_INFO_FIRST_NAME,
+	HBP_REQ_INFO_LAST_NAME,
+	HBP_REQ_INFO_LENGTH
+} hbp_rep_info_params_t;
 
 #if 0
 /* Account types */
