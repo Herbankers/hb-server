@@ -87,14 +87,21 @@ extern uint16_t sql_port;
 /**
  * @brief Log to command-line (and optionally to a log file)
  *
- * This function prints to the command-line (when the -v flag is specified in argv).
+ * This function prints to the command-line when debug is false (or always when the -v flag is specified in argv).
  * The log is also written to a file (when -o is specified in argv).
- * Parameters are exactly the same as printf(3).
+ * Parameters after debug are exactly the same as printf(3).
  *
+ * @param debug Specifies if this is a debugging message or info message
  * @param fmt Specifies how subsequent arguments are converted
  * @param ... Variable number of arguments
  */
-void lprintf(const char *fmt, ...);
+void lprintf(bool debug, const char *fmt, ...);
+
+/** @brief wrapper around lprintf, print even in non-verbose mode */
+#define iprintf(fmt, args...) lprintf(false, fmt, ## args)
+
+/** @brief wrapper around lprintf, print only in verbose mode (when running with -v) */
+#define dprintf(fmt, args...) lprintf(true, fmt, ## args)
 
 /**
  * @brief Session thread

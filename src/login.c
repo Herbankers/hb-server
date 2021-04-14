@@ -94,7 +94,7 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	/* check if the card ID from the request is in the database */
 	sqlres = query(conn, "SELECT `user_id`, `pin`, `attempts` FROM `cards` WHERE `card_id` = x'%s'", card_id);
 	if (!(row = mysql_fetch_row(sqlres))) {
-		lprintf("%s: invalid card ID\n", conn->host);
+		dprintf("%s: invalid card ID\n", conn->host);
 		goto err;
 	}
 

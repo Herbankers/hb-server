@@ -60,7 +60,7 @@ static bool verify(struct connection *conn)
 
 	/* resolve the host */
 	if (getaddrinfo(NULL, port, &hints, &addr) != 0) {
-		lprintf("unable to resolve host %s\n", conn->host);
+		iprintf("unable to resolve host %s\n", conn->host);
 		return false;
 	}
 
@@ -75,28 +75,28 @@ static bool verify(struct connection *conn)
 #if SSLSOCK
 	/* setup an SSL/TLS connection */
 	if (!(conn->ssl = SSL_new(ctx))) {
-		lprintf("unable to allocate SSL structure\n");
+		iprintf("unable to allocate SSL structure\n");
 		return false;
 	}
 	SSL_set_fd(conn->ssl, conn->socket);
 
 	if (SSL_accept(conn->ssl) <= 0) {
-		lprintf("%s: SSL error\n", conn->host);
+		iprintf("%s: SSL error\n", conn->host);
 		return false;
 	}
 
 	/* get and verify the client certificate */
 	if (!SSL_get_peer_certificate(conn->ssl)) {
-		lprintf("client failed to present certificate\n");
+		iprintf("client failed to present certificate\n");
 		return false;
 	}
 	if (SSL_get_verify_result(conn->ssl) != X509_V_OK) {
-		lprintf("certificate verfication failed\n");
+		iprintf("certificate verfication failed\n");
 		return false;
 	}
 #endif
 
-	lprintf("%s: Client connected\n", conn->host);
+	dprintf("%s: Client connected\n", conn->host);
 
 	return true;
 }
@@ -134,11 +134,11 @@ static int receiverequest(struct connection *conn, struct hbp_header *request, c
 
 	/* check if the header is valid and if a compatible HBP version is used by the client */
 	if (request->magic != HBP_MAGIC || request->length > HBP_LENGTH_MAX) {
-		lprintf("%s: not a HBP packet, disconnecting...\n", conn->host);
+		iprintf("%s: not a HBP packet, disconnecting...\n", conn->host);
 		return -1;
 	}
 	if (request->version != HBP_VERSION) {
-		lprintf("%s: HBP version mismatch (client has: %u, server wants %u), disconnecting...\n",
+		iprintf("%s: HBP version mismatch (client has: %u, server wants %u), disconnecting...\n",
 				conn->host, request->version, HBP_VERSION);
 		return -1;
 	}
@@ -147,14 +147,14 @@ static int receiverequest(struct connection *conn, struct hbp_header *request, c
 		if (reqrepmap[i].index != request->type)
 			continue;
 
-		lprintf("%s: %s request\n", conn->host, reqrepmap[i].name);
+		dprintf("%s: %s request\n", conn->host, reqrepmap[i].name);
 		break;
 	}
 
 	/* read request data (if available) */
 	if (request->length) {
 		if (!(*buf = malloc(request->length))) {
-			lprintf("out of memory\n");
+			iprintf("out of memory\n");
 			return 0;
 		}
 
@@ -182,7 +182,7 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 	/* check if the session hasn't timed out */
 	if (conn->logged_in && time(NULL) > conn->expiry_time) {
 		/* log out if the session has timed out */
-		lprintf("%s: session timeout: %s (u %u, c %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
+		iprintf("%s: Session timeout: %s (User %u, Card %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
 
 		/* reply header */
 		reply->type = HBP_REP_TERMINATED;
@@ -199,7 +199,8 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 				return false;
 
 			if (conn->logged_in)
-				lprintf("%s: session login: %s (u %u, c %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
+				iprintf("%s: Session login: %s (User %u, Card %u)\n", conn->host, conn->iban,
+						conn->user_id, conn->card_id);
 
 			break;
 		case HBP_REQ_LOGOUT:
@@ -208,7 +209,7 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 
 			conn->logged_in = false;
 
-			lprintf("%s: session logout: %s (u %u, c %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
+			iprintf("%s: Session logout: %s (User %u, Card %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
 
 			/* clear all other variables for security */
 			conn->expiry_time = 0;
@@ -233,7 +234,7 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 
 	/* copy the msgpack buffer to a newly allocated array to be returned */
 	if (!(*reply_data = malloc(sbuf.size))) {
-		lprintf("out of memory\n");
+		iprintf("out of memory\n");
 		return false;
 	}
 
@@ -268,18 +269,18 @@ void *session(void *args)
 
 	/* connect to the database */
 	if (!(conn.sql = mysql_init(NULL))) {
-		lprintf("out of memory\n");
+		iprintf("out of memory\n");
 		goto ret;
 	}
 	if (!mysql_real_connect(conn.sql, sql_host, sql_user, sql_pass, sql_db, sql_port, NULL, 0)) {
-		lprintf("failed to connect to the database: %s\n", mysql_error(conn.sql));
+		iprintf("failed to connect to the database: %s\n", mysql_error(conn.sql));
 		goto ret;
 	}
 
 	for (;;) {
 		/* disconnect if the maximum number of erroneous requests has been exceeded */
 		if (conn.errcnt > HBP_ERROR_MAX) {
-			lprintf("%s: the maximum error count (%d) has been exceeded\n", conn.host, HBP_ERROR_MAX);
+			iprintf("%s: the maximum error count (%d) has been exceeded\n", conn.host, HBP_ERROR_MAX);
 
 			break;
 		}
@@ -291,7 +292,7 @@ void *session(void *args)
 			break;
 		case 0:
 			/* invalid request */
-			lprintf("%s: invalid request\n", conn.host);
+			iprintf("%s: invalid request\n", conn.host);
 			conn.errcnt++;
 			continue;
 		case -1:
@@ -301,7 +302,7 @@ void *session(void *args)
 
 		/* process the client's request */
 		if (!handle_request(&conn, &request, request_data, &reply, &reply_data)) {
-			lprintf("%s: error processing request\n", conn.host);
+			iprintf("%s: error processing request\n", conn.host);
 			conn.errcnt++;
 
 			/* don't continue, but inform the client that processing their request has failed */
@@ -311,7 +312,7 @@ void *session(void *args)
 
 		/* send our reply */
 		if (!sendreply(&conn, &reply, reply_data)) {
-			lprintf("%s: error sending reply\n", conn.host);
+			iprintf("%s: error sending reply\n", conn.host);
 			conn.errcnt++;
 			continue;
 		}
@@ -320,13 +321,13 @@ void *session(void *args)
 			if (reqrepmap[i].index != reply.type)
 				continue;
 
-			lprintf("%s: %s reply\n", conn.host, reqrepmap[i].name);
+			dprintf("%s: %s reply\n", conn.host, reqrepmap[i].name);
 			break;
 		}
 	}
 
 ret:
-	lprintf("%s: Client disconnected\n", conn.host);
+	dprintf("%s: Client disconnected\n", conn.host);
 
 	/* free the reply and request data buffers */
 	free(request_data);

@@ -61,7 +61,7 @@ SSL_CTX *ctx;
 char *sql_host, *sql_db, *sql_user, *sql_pass;
 uint16_t sql_port;
 
-void lprintf(const char *fmt, ...)
+void lprintf(bool debug, const char *fmt, ...)
 {
 	FILE *file = NULL;
 	time_t t;
@@ -85,7 +85,7 @@ void lprintf(const char *fmt, ...)
 		fclose(file);
 	}
 
-	if (verbose) {
+	if (!debug || verbose) {
 		va_start(args, fmt);
 		vprintf(fmt, args);
 		va_end(args);
@@ -107,7 +107,7 @@ MYSQL_RES *query(struct connection *conn, const char *fmt, ...)
 	va_end(args);
 
 	if (!(query = malloc(n))) {
-		lprintf("out of memory\n");
+		iprintf("out of memory\n");
 		return NULL;
 	}
 
@@ -117,7 +117,7 @@ MYSQL_RES *query(struct connection *conn, const char *fmt, ...)
 
 	/* process the query */
 	if (mysql_query(conn->sql, query)) {
-		lprintf("%s: error running query: %s\n", conn->host, mysql_error(conn->sql));
+		iprintf("%s: error running query: %s\n", conn->host, mysql_error(conn->sql));
 		return NULL;
 	}
 
@@ -136,7 +136,7 @@ static bool ssl_initialize(void)
 	const SSL_METHOD *met;
 
 	/* initialize OpenSSL */
-	lprintf(" initializing OpenSSL...\n");
+	iprintf(" initializing OpenSSL...\n");
 	SSL_library_init();
 	SSL_load_error_strings();
 
@@ -147,29 +147,29 @@ static bool ssl_initialize(void)
 
 	/* load CA */
 	if (access(ca, F_OK) < 0) {
-		lprintf("%s: %s\n", ca, strerror(errno));
+		iprintf("%s: %s\n", ca, strerror(errno));
 		goto err;
 	}
-	lprintf("using '%s' CA\n", ca);
+	dprintf("using '%s' CA\n", ca);
 	if (!SSL_CTX_load_verify_locations(ctx, ca, NULL)) {
-		lprintf("unable to load CA: %s\n", ca);
+		iprintf("unable to load CA: %s\n", ca);
 		goto err;
 	}
 
 	/* load certificate and private key files */
 	if (access(cert, F_OK) < 0) {
-		lprintf("%s: %s\n", cert, strerror(errno));
+		iprintf("%s: %s\n", cert, strerror(errno));
 		goto err;
 	}
-	lprintf("using '%s' certificate\n", cert);
+	dprintf("using '%s' certificate\n", cert);
 	if (SSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) != 1)
 		goto err;
 
 	if (access(key, F_OK) < 0) {
-		lprintf("%s: %s\n", key, strerror(errno));
+		iprintf("%s: %s\n", key, strerror(errno));
 		goto err;
 	}
-	lprintf("using '%s' private key\n", key);
+	dprintf("using '%s' private key\n", key);
 	if (SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) != 1)
 		goto err;
 
@@ -180,7 +180,7 @@ static bool ssl_initialize(void)
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 	SSL_CTX_set_verify_depth(ctx, 1);
 
-	lprintf("OpenSSL has been successfully initialized\n");
+	dprintf("OpenSSL has been successfully initialized\n");
 
 	return true;
 
@@ -200,13 +200,13 @@ static bool mysql_test(void)
 
 	/* intialize MySQL */
 	if (!(sql = mysql_init(NULL))) {
-		lprintf("mysql internal error\n");
+		iprintf("mysql internal error\n");
 		return false;
 	}
 
 	/* test our MySQL username, password and if the database exists */
 	if (!mysql_real_connect(sql, sql_host, sql_user, sql_pass, sql_db, sql_port, NULL, 0)) {
-		lprintf("failed to connect to the database: %s\n", mysql_error(sql));
+		iprintf("failed to connect to the database: %s\n", mysql_error(sql));
 		return false;
 	}
 
@@ -239,13 +239,13 @@ static bool run(void)
 
 	/* create the socket */
 	if ((sock = socket(PF_INET6, SOCK_STREAM, 0)) < 0) {
-		lprintf("unable to create socket: %s\n", strerror(errno));
+		iprintf("unable to create socket: %s\n", strerror(errno));
 		return false;
 	}
 
 	/* allow socket to be reused */
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) < 0) {
-		lprintf("%s\n", strerror(errno));
+		iprintf("%s\n", strerror(errno));
 		return false;
 	}
 
@@ -255,28 +255,28 @@ static bool run(void)
 	server.sin6_addr = in6addr_any;
 	server.sin6_port = htons(strtol(port, NULL, 10));
 
-	lprintf(" Binding socket...\n");
+	iprintf(" Binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
-		lprintf("unable to bind socket: %s\n", strerror(errno));
+		iprintf("unable to bind socket: %s\n", strerror(errno));
 		return false;
 	}
 
-	lprintf(" The server is listening on port %s...\n", port);
+	iprintf(" The server is listening on port %s...\n", port);
 	if (listen(sock, SOMAXCONN) < 0) {
-		lprintf("%s\n", strerror(errno));
+		iprintf("%s\n", strerror(errno));
 		return false;
 	}
 
 	/* listen for clients */
 	for (;;) {
 		if ((csock = accept(sock, NULL, NULL)) < 0) {
-			lprintf("%s\n", strerror(errno));
+			iprintf("%s\n", strerror(errno));
 			continue;
 		}
 
 		/* create a thread for every new connection */
 		if (pthread_create(&thread, NULL, session, &csock)) {
-			lprintf("unable to allocate thread\n");
+			iprintf("unable to allocate thread\n");
 			close(csock);
 		}
 	}
@@ -415,15 +415,15 @@ int main(int argc, char **argv)
 
 #if SSLSOCK
 	if (!ca) {
-		lprintf("hb-server: please specify a CA file\n");
+		iprintf("hb-server: please specify a CA file\n");
 		usage(argv[0]);
 		goto err;
 	} else if (!cert) {
-		lprintf("hb-server: please specify a certificate file\n");
+		iprintf("hb-server: please specify a certificate file\n");
 		usage(argv[0]);
 		goto err;
 	} else if (!key) {
-		lprintf("hb-server: please specify a private key file\n");
+		iprintf("hb-server: please specify a private key file\n");
 		usage(argv[0]);
 		goto err;
 	}
@@ -458,7 +458,7 @@ int main(int argc, char **argv)
 	}
 
 	/* the exciting part, get everything started up */
-	lprintf("Copyright (C) 2021 Herbank Server v1.0\n");
+	iprintf("Copyright (C) 2021 Herbank Server v1.0\n");
 
 	if (!run())
 		goto err;
