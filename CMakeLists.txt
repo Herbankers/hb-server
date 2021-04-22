@@ -28,15 +28,11 @@ set(HEADERS
 )
 
 set(SOURCES
-	#src/accounts.c
 	#src/iban.c
 	src/info.c
 	src/login.c
 	src/session.c
 	src/main.c
-	#src/pin_update.c
-	#src/transactions.c
-	#src/transfer.c
 )
 
 add_executable(${PROJECT_NAME}
