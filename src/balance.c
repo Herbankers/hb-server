@@ -29,31 +29,34 @@
 #include "hbp.h"
 #include "herbank.h"
 
-bool info(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
+bool balance(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
 	MYSQL_ROW row;
 	MYSQL_RES *sqlres = NULL;
+	char *balance_str;
 
 	/* retrieve the user's first and last name from the database */
-	sqlres = query(conn, "SELECT `first_name`, `last_name` FROM `users` WHERE `user_id` = '%u'", conn->user_id);
+	sqlres = query(conn, "SELECT `balance` FROM `accounts` WHERE `iban` = '%s'", conn->iban);
 	if (!(row = mysql_fetch_row(sqlres))) {
-		dprintf("invalid user ID: %s\n", conn->user_id);
+		dprintf("invalid IBAN: %s\n", conn->iban);
 		goto err;
 	}
 
 	/* @param type */
-	reply->type = HBP_REP_INFO;
+	reply->type = HBP_REP_BALANCE;
 
-	msgpack_pack_array(pack, 2);
+	/* create a new string and add the decimal point (hence +2 including null terminator) */
+	if (!(balance_str = malloc(strlen(row[0]) + 2)))
+		goto err;
+	memcpy(balance_str, row[0], strlen(row[0]) - 2);
+	balance_str[strlen(row[0]) - 2] = '.';
+	memcpy(balance_str + strlen(row[0]) - 1, row[0] + strlen(row[0]) - 2, 3);
 
-	/* First name */
-	msgpack_pack_str(pack, strlen(row[0]));
-	msgpack_pack_str_body(pack, row[0], strlen(row[0]));
+	/* Balance */
+	msgpack_pack_str(pack, strlen(balance_str));
+	msgpack_pack_str_body(pack, balance_str, strlen(balance_str));
 
-	/* Last name */
-	msgpack_pack_str(pack, strlen(row[1]));
-	msgpack_pack_str_body(pack, row[1], strlen(row[1]));
-
+	free(balance_str);
 	mysql_free_result(sqlres);
 
 	return true;

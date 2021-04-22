@@ -136,8 +136,7 @@ typedef enum {
 	/**
 	 * @brief Request for the balance of the account associated with the current session
 	 *
-	 * Not yet implemented
-	 * TODO
+	 * Request the server to send the current balance of account associated with the current session.
 	 *
 	 * @sa The reply associated with this request: #HBP_REP_BALANCE
 	 */
@@ -169,7 +168,7 @@ typedef enum {
 	/**
 	 * @brief Reply to a request for a new session
 	 *
-	 * @param status See #hbp_rep_login_status_t
+	 * @param status (int) See #hbp_rep_login_status_t
 	 *
 	 * @sa The request associated with this reply: #HBP_REQ_LOGIN
 	 */
@@ -181,7 +180,7 @@ typedef enum {
 	 * This reply will also be sent if the session is about to be expired of if too many errornous
 	 * This reply may also be sent when either the server is about to be shut down or if the session has expired.
 	 *
-	 * @param reason See #hbp_rep_term_reason_t
+	 * @param reason (int) See #hbp_rep_term_reason_t
 	 *
 	 * @sa A request that can be associated with this reply: #HBP_REQ_LOGOUT
 	 */
@@ -192,8 +191,8 @@ typedef enum {
 	 *
 	 * This reply will return the name of the user who's currently logged in.
 	 *
-	 * @param first_name First name of the user who's currently logged in
-	 * @param last_name Last name of the user who's currently logged in
+	 * @param first_name (string) First name of the user who's currently logged in
+	 * @param last_name (string) Last name of the user who's currently logged in
 	 *
 	 * @sa The request associated with this reply: #HBP_REQ_INFO
 	 * @sa An enumeration of parameters: #hbp_rep_info_params_t
@@ -203,8 +202,10 @@ typedef enum {
 	/**
 	 * @brief Reply to a request request for the balance of the account associated with the current session
 	 *
-	 * Not yet implemented
-	 * TODO
+	 * This reply will return the current balance of the account associated with this session.
+	 * The balance does include a decimal point '.' to separate Euros from Eurocents. I.e. 420.69
+	 *
+	 * @param balance (string) The user's current balance including a decimal point
 	 *
 	 * @sa The request associated with this reply: #HBP_REQ_BALANCE
 	 */

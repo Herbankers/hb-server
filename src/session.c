@@ -235,6 +235,11 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 		case HBP_REQ_BALANCE:
 			if (!conn->logged_in)
 				return false;
+
+			if (!balance(conn, request_data, request->length, reply, &pack))
+				return false;
+
+			break;
 		case HBP_REQ_TRANSFER:
 			if (!conn->logged_in)
 				return false;
