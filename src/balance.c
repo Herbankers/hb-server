@@ -31,11 +31,11 @@
 
 bool balance(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
-	MYSQL_ROW row;
 	MYSQL_RES *sqlres = NULL;
+	MYSQL_ROW row;
 	char *balance_str;
 
-	/* retrieve the user's first and last name from the database */
+	/* retrieve this account's balance from the database */
 	sqlres = query(conn, "SELECT `balance` FROM `accounts` WHERE `iban` = '%s'", conn->iban);
 	if (!(row = mysql_fetch_row(sqlres))) {
 		dprintf("invalid IBAN: %s\n", conn->iban);
@@ -52,7 +52,7 @@ bool balance(struct connection *conn, const char *data, uint16_t len, struct hbp
 	balance_str[strlen(row[0]) - 2] = '.';
 	memcpy(balance_str + strlen(row[0]) - 1, row[0] + strlen(row[0]) - 2, 3);
 
-	/* Balance */
+	/* @param balance */
 	msgpack_pack_str(pack, strlen(balance_str));
 	msgpack_pack_str_body(pack, balance_str, strlen(balance_str));
 

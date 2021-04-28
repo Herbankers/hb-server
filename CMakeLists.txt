@@ -29,6 +29,7 @@ set(HEADERS
 
 set(SOURCES
 	#src/iban.c
+	src/transfer.c
 	src/balance.c
 	src/info.c
 	src/login.c

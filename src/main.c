@@ -94,6 +94,27 @@ void lprintf(bool debug, const char *fmt, ...)
 	pthread_mutex_unlock(&log_lock);
 }
 
+char *escape(struct connection *conn, const char *str, size_t limit)
+{
+	char *out;
+	int len = strlen(str);
+	int res;
+
+	if (!(out = malloc(len * 2 + 1))) {
+		iprintf("out of memory\n");
+		return NULL;
+	}
+
+	res = mysql_real_escape_string(conn->sql, out, str, strlen(str));
+
+	if (res < 0 || (limit && res > limit)) {
+		free(out);
+		return NULL;
+	}
+
+	return out;
+}
+
 MYSQL_RES *query(struct connection *conn, const char *fmt, ...)
 {
 	MYSQL_RES *res;

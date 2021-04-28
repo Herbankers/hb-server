@@ -210,13 +210,13 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 			if (!conn->logged_in)
 				return false;
 
+			iprintf("%s: Session logout: %s (User %u, Card %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
+
 			conn->logged_in = false;
 			/* clear all other variables for security */
 			conn->expiry_time = 0;
 			conn->user_id = 0;
 			conn->card_id = 0;
-
-			iprintf("%s: Session logout: %s (User %u, Card %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
 
 			/* also send an appropriate reply to the client that it's been logged out */
 			reply->type = HBP_REP_TERMINATED;
@@ -243,6 +243,11 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 		case HBP_REQ_TRANSFER:
 			if (!conn->logged_in)
 				return false;
+
+			if (!transfer(conn, request_data, request->length, reply, &pack))
+				return false;
+
+			break;
 		/* invalid request */
 		default:
 			return false;

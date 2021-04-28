@@ -103,9 +103,10 @@ typedef enum {
 	 * or sending more than #HBP_ERROR_MAX invalid requests will also end an active session.
 	 * Only one session per connection is possible.
 	 *
-	 * @param card_id The bank card's unique IDentifier (max. #HBP_CID_MAX + 1 bytes)
-	 * @param iban The bank account number (min. #HBP_IBAN_MIN and max. #HBP_IBAN_MAX bytes)
-	 * @param pin The PIN code associated with the card ID (min. #HBP_PIN_MIN and max. #HBP_PIN_MAX + 1 bytes)
+	 * @param card_id (string) The bank card's unique IDentifier (max. #HBP_CID_MAX + 1 bytes)
+	 * @param iban (string) The bank account number (min. #HBP_IBAN_MIN and max. #HBP_IBAN_MAX bytes)
+	 * @param pin (string) The PIN code associated with the card ID (min. #HBP_PIN_MIN and max. #HBP_PIN_MAX + 1
+	 * bytes)
 	 *
 	 * @sa The reply associated with this request: #HBP_REP_LOGIN
 	 * @sa An enumeration of parameters: #hbp_req_login_params_t
@@ -145,10 +146,21 @@ typedef enum {
 	/**
 	 * @brief Request to transfer, withdraw or deposit money from/to the account associated with the current session
 	 *
-	 * Not yet implemented
-	 * TODO
+	 * Execute a transfer (non-blocking unless executed immediately) from the account associated with the current
+	 * session to the account associated with iban. iban can also be an external account.
+	 *
+	 * If iban equals the IBAN associated with the current session, a deposit will be executed.
+	 * If iban is left empty, a withdrawal from the account associated with the current session will be executed.
+	 *
+	 * Amount must be formatted as a whole number. The last 2 digits indicate the Eurocents and must always be
+	 * included.
+	 * Amount must also be a positive number.
+	 *
+	 * @param iban (string) The destination IBAN
+	 * @param amount (int64) The amount to be transferred
 	 *
 	 * @sa The reply associated with this request: #HBP_REP_TRANSFER
+	 * @sa An enumeration of parameters: #hbp_req_transfer_params_t
 	 */
 	HBP_REQ_TRANSFER
 } hbp_request_t;
@@ -160,6 +172,13 @@ typedef enum {
 	HBP_REQ_LOGIN_PIN,
 	HBP_REQ_LOGIN_LENGTH
 } hbp_req_login_params_t;
+
+/** @brief Parameters included in #HBP_REQ_TRANSFER */
+typedef enum {
+	HBP_REQ_TRANSFER_IBAN,
+	HBP_REQ_TRANSFER_AMOUNT,
+	HBP_REQ_TRANSFER_LENGTH
+} hbp_req_transfer_params_t;
 
 /**
  * @brief Types of replies
@@ -177,7 +196,7 @@ typedef enum {
 	/**
 	 * @brief Reply to a request to logout (also sent when the session is about to be logged out of unexpectedly)
 	 *
-	 * This reply will also be sent if the session is about to be expired of if too many errornous
+	 * This reply will also be sent if the session is about to be expired of if too many errornous.
 	 * This reply may also be sent when either the server is about to be shut down or if the session has expired.
 	 *
 	 * @param reason (int) See #hbp_rep_term_reason_t
@@ -215,8 +234,9 @@ typedef enum {
 	 * @brief Reply to a request to request to transfer, withdraw or deposit money from/to the account associated
 	 *        with the current session
 	 *
-	 * Not yet implemented
-	 * TODO
+	 * This reply will return the result of a request of transfer, withdraw or deposit money.
+	 *
+	 * @param result (int) See #hbp_rep_transfer_result_t
 	 *
 	 * @sa The request associated with this reply: #HBP_REQ_TRANSFER
 	 */
@@ -231,6 +251,13 @@ typedef enum {
 	 */
 	HBP_REP_ERROR
 } hbp_reply_t;
+
+/** @brief Parameters included in #HBP_REP_INFO */
+typedef enum {
+	HBP_REP_INFO_FIRST_NAME,
+	HBP_REP_INFO_LAST_NAME,
+	HBP_REP_INFO_LENGTH
+} hbp_rep_info_params_t;
 
 /** @brief Indicates whether the login failed or succeeded in #HBP_REP_LOGIN */
 typedef enum {
@@ -252,19 +279,12 @@ typedef enum {
 	HBP_TERM_CLOSED
 } hbp_rep_term_reason_t;
 
-/** @brief Parameters included in #HBP_REP_INFO */
+/** @brief Result status of a transfer in #HBP_REP_TRANSFER */
 typedef enum {
-	HBP_REQ_INFO_FIRST_NAME,
-	HBP_REQ_INFO_LAST_NAME,
-	HBP_REQ_INFO_LENGTH
-} hbp_rep_info_params_t;
-
-#if 0
-/* Account types */
-typedef enum {
-	/* Checkings account */
-	HBP_A_CHECKING,
-	/* Savings account */
-	HBP_A_SAVINGS
-} hbp_account_t;
-#endif
+	/** The transfer has been approved and has successfully been processed */
+	HBP_TRANSFER_SUCCESS,
+	/** request has been send to an external server but is still processing, the status is unknown right now */
+	HBP_TRANSFER_PROCESSING,
+	/** transfer has failed to process due to insufficient funds on the source account */
+	HBP_TRANSFER_INSUFFICIENT_FUNDS
+} hbp_rep_transfer_result_t;

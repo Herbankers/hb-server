@@ -34,12 +34,12 @@
 
 bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
+	char card_id[HBP_CID_MAX * 2 + 1], iban[HBP_IBAN_MAX + 1], pin[HBP_PIN_MAX + 1], *escaped;
 	msgpack_unpacker unpack;
 	msgpack_unpacked unpacked;
 	msgpack_object *array;
-	char card_id[HBP_CID_MAX * 2 + 1], iban[HBP_IBAN_MAX + 1], pin[HBP_PIN_MAX + 1];
-	MYSQL_ROW row;
 	MYSQL_RES *sqlres = NULL;
+	MYSQL_ROW row;
 
 	if (!msgpack_unpacker_init(&unpack, len))
 		return false;
@@ -64,24 +64,54 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		goto err;
 	array = unpacked.data.via.array.ptr;
 
-	/* Card ID */
-	if (array[HBP_REQ_LOGIN_CARD_ID].via.str.size > HBP_CID_MAX)
+	/* @param card_id */
+	if (array[HBP_REQ_LOGIN_CARD_ID].via.str.size > HBP_CID_MAX * 2)
 		goto err;
 	memset(card_id, '0', HBP_CID_MAX * 2);
 	memcpy(card_id, array[HBP_REQ_LOGIN_CARD_ID].via.str.ptr, array[HBP_REQ_LOGIN_CARD_ID].via.str.size);
 	card_id[HBP_CID_MAX * 2] = '\0';
 
-	/* IBAN */
+	/* escape the Card ID */
+	if ((escaped = escape(conn, card_id, HBP_CID_MAX * 2))) {
+		strcpy(card_id, escaped);
+		free(escaped);
+	} else {
+		dprintf("invalid card ID: %s\n", card_id);
+		goto err;
+	}
+
+	/* @param iban */
 	if (array[HBP_REQ_LOGIN_IBAN].via.str.size < HBP_IBAN_MIN || array[HBP_REQ_LOGIN_IBAN].via.str.size > HBP_IBAN_MAX)
 		goto err;
-	memcpy(iban, array[HBP_REQ_LOGIN_IBAN].via.str.ptr, array[1].via.str.size);
+	memcpy(iban, array[HBP_REQ_LOGIN_IBAN].via.str.ptr, array[HBP_REQ_LOGIN_IBAN].via.str.size);
 	iban[array[HBP_REQ_LOGIN_IBAN].via.str.size] = '\0';
 
-	/* PIN */
+	/* escape the IBAN */
+	if ((escaped = escape(conn, iban, HBP_IBAN_MAX))) {
+		strcpy(iban, escaped);
+		free(escaped);
+	} else {
+		dprintf("invalid IBAN: %s\n", iban);
+		goto err;
+	}
+
+	/* @param pin */
 	if (array[HBP_REQ_LOGIN_PIN].via.str.size > HBP_PIN_MAX)
 		goto err;
 	memcpy(pin, array[HBP_REQ_LOGIN_PIN].via.str.ptr, array[HBP_REQ_LOGIN_PIN].via.str.size);
 	pin[array[HBP_REQ_LOGIN_PIN].via.str.size] = '\0';
+
+	/* escape the PIN */
+	if ((escaped = escape(conn, pin, HBP_PIN_MAX))) {
+		strcpy(pin, escaped);
+		free(escaped);
+	} else {
+		dprintf("invalid PIN: %s\n", pin);
+		goto err;
+	}
+
+	msgpack_unpacked_destroy(&unpacked);
+	msgpack_unpacker_destroy(&unpack);
 
 	/*
 	 * TODO Also check IBAN
@@ -96,9 +126,6 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		dprintf("invalid card ID: %s\n", conn->card_id);
 		goto err;
 	}
-
-	msgpack_unpacked_destroy(&unpacked);
-	msgpack_unpacker_destroy(&unpack);
 
 	/* @param type */
 	reply->type = HBP_REP_LOGIN;

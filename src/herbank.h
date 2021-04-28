@@ -114,6 +114,17 @@ void lprintf(bool debug, const char *fmt, ...);
 void *session(void *args);
 
 /**
+ * @brief Escape a string to be used in a MySQL query
+ *
+ * @param conn Connection structure (see struct #connection)
+ * @param str String to escape
+ * @param limit Maximum length of the output string (excluding null terminator), set to 0 for no limit
+ *
+ * @return A pointer to a heap allocated (malloc) escaped string. NULL if out of memory or if the limit was exceeded
+ */
+char *escape(struct connection *conn, const char *str, size_t limit);
+
+/**
  * @brief Run a MySQL query
  *
  * @param conn Connection structure (see struct #connection)
@@ -124,14 +135,10 @@ void *session(void *args);
  */
 MYSQL_RES *query(struct connection *conn, const char *fmt, ...);
 
-/* int accounts_get(MYSQL *sql, struct token *tok, char **buf); */
-/* int login(MYSQL *sql, struct token *tok, char **buf); */
 bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
 bool info(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
 bool balance(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
-/* int pin_update(MYSQL *sql, struct token *tok, char **buf); */
-/* int transactions_get(char **buf); */
-/* int transfer(MYSQL *sql, struct token *tok, char **buf); */
+bool transfer(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
 
 /* int iban_getcheck(const char *_iban); */
 /* bool iban_validate(const char *iban); */

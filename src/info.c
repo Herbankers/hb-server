@@ -31,8 +31,8 @@
 
 bool info(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
-	MYSQL_ROW row;
 	MYSQL_RES *sqlres = NULL;
+	MYSQL_ROW row;
 
 	/* retrieve the user's first and last name from the database */
 	sqlres = query(conn, "SELECT `first_name`, `last_name` FROM `users` WHERE `user_id` = '%u'", conn->user_id);
@@ -46,11 +46,11 @@ bool info(struct connection *conn, const char *data, uint16_t len, struct hbp_he
 
 	msgpack_pack_array(pack, 2);
 
-	/* First name */
+	/* @param first_name */
 	msgpack_pack_str(pack, strlen(row[0]));
 	msgpack_pack_str_body(pack, row[0], strlen(row[0]));
 
-	/* Last name */
+	/* @param last_name */
 	msgpack_pack_str(pack, strlen(row[1]));
 	msgpack_pack_str_body(pack, row[1], strlen(row[1]));
 
