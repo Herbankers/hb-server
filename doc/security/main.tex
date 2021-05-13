@@ -1,0 +1,71 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage{newunicodechar}
+\usepackage[dutch]{babel}
+
+\usepackage[margin=1.0in]{geometry}
+\usepackage[parfill]{parskip}
+\tolerance=1000
+\hyphenpenalty=1000
+%\hbadness=10000
+%\widowpenalties=1 10000
+%\raggedbottom
+
+%\usepackage[bookmarks]{hyperref}
+%\usepackage[backend=biber,defernumbers,sortcites,sorting=none]{biblatex}
+%\usepackage{blindtext}
+%\usepackage{booktabs}
+%\usepackage{enumitem}
+%\usepackage{graphicx, wrapfig}
+%\usepackage{mathtools}
+%\usepackage{subcaption}
+%\usepackage{textcomp}
+
+% sans-serif
+\usepackage{cochineal}
+\usepackage[varqu,varl,var0]{zi4} % Inconsolata
+\usepackage[scale=.95,type1]{cabin}
+\usepackage[cochineal,bigdelims,cmintegrals,vvarbb]{newtxmath}
+\usepackage[cal=boondoxo]{mathalfa}
+
+\newcommand{\TITLE}{Beveiligings-/Adviesrapport}
+\newcommand{\SUBTITLE}{Project 3/4: Bank}
+\newcommand{\AUTHOR}{Bastiaan Teeuwen}
+\newcommand{\INSTITUTE}{Hogeschool Rotterdam}
+\newcommand{\DATE}{\today}
+
+\title{\TITLE{} --- \SUBTITLE}
+\author{\AUTHOR}
+\date{\DATE}
+
+%\addbibresource{bibliography.bib}
+
+\begin{document}
+
+\begin{titlepage}
+
+\raggedleft%
+
+\rule{1pt}{\textheight}
+\hspace{0.05 \textwidth}
+\parbox[b]{0.75 \textwidth}{%
+	{\huge \textbf{\TITLE}}\\[\baselineskip]
+	{\Large \textbf{\SUBTITLE}}\\[3\baselineskip]
+	{\large \AUTHOR}
+
+	\vspace{0.5 \textheight}
+
+	{\large \INSTITUTE}\\[\baselineskip]
+	{\textit{\DATE}}\\[\baselineskip]
+}
+
+\end{titlepage}
+
+\chapter{Beveiligingsrapport}
+
+\section{
+
+\chapter{Adviesrapport}
+
+\end{document}

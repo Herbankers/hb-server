@@ -110,9 +110,6 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		goto err;
 	}
 
-	msgpack_unpacked_destroy(&unpacked);
-	msgpack_unpacker_destroy(&unpack);
-
 	/*
 	 * TODO Also check IBAN
 	 *
@@ -123,9 +120,12 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	/* check if the card ID from the request is in the database */
 	sqlres = query(conn, "SELECT `user_id`, `pin`, `attempts` FROM `cards` WHERE `card_id` = x'%s'", card_id);
 	if (!(row = mysql_fetch_row(sqlres))) {
-		dprintf("invalid card ID: %s\n", conn->card_id);
+		dprintf("invalid card ID: %s\n", card_id);
 		goto err;
 	}
+
+	msgpack_unpacked_destroy(&unpacked);
+	msgpack_unpacker_destroy(&unpack);
 
 	/* @param type */
 	reply->type = HBP_REP_LOGIN;

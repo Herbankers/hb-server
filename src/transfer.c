@@ -83,9 +83,6 @@ bool transfer(struct connection *conn, const char *data, uint16_t len, struct hb
 	/* @param amount */
 	amount = array[HBP_REQ_TRANSFER_AMOUNT].via.i64;
 
-	msgpack_unpacked_destroy(&unpacked);
-	msgpack_unpacker_destroy(&unpack);
-
 	/* @param type */
 	reply->type = HBP_REP_TRANSFER;
 
@@ -101,6 +98,9 @@ bool transfer(struct connection *conn, const char *data, uint16_t len, struct hb
 		goto err;
 	}
 
+	msgpack_unpacked_destroy(&unpacked);
+	msgpack_unpacker_destroy(&unpack);
+
 	/*
 	 * check if the funds of the current account are sufficient
 	 *
@@ -112,10 +112,15 @@ bool transfer(struct connection *conn, const char *data, uint16_t len, struct hb
 		/* @param status */
 		msgpack_pack_int(pack, HBP_TRANSFER_INSUFFICIENT_FUNDS);
 	} else {
-		/* check if this is a transfer, withdrawal or deposit */
+		/* TODO check if this is a transfer, withdrawal or deposit */
+
+		/* right now this is only a withdrawal */
+
+		/* TODO check if this actually succeeded */
+		query(conn, "UPDATE `accounts` SET `balance` = `balance` - '%d' WHERE `iban` = '%s'", amount, conn->iban);
 
 		/* @param result */
-		msgpack_pack_int(pack, HBP_TRANSFER_PROCESSING);
+		msgpack_pack_int(pack, HBP_TRANSFER_SUCCESS);
 
 #if 0
 		/* retrieve the user's first and last name from the database */
