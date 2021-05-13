@@ -255,7 +255,7 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 	}
 
 	/* copy the msgpack buffer to a newly allocated array to be returned */
-	if (!(*reply_data = malloc(sbuf.size))) {
+	if (!(*reply_data = realloc(*reply_data, sbuf.size))) {
 		iprintf("out of memory\n");
 		return false;
 	}
