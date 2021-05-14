@@ -102,13 +102,13 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	pin[array[HBP_REQ_LOGIN_PIN].via.str.size] = '\0';
 
 	/* escape the PIN */
-	if ((escaped = escape(conn, pin, HBP_PIN_MAX))) {
+	/* if ((escaped = escape(conn, pin, HBP_PIN_MAX))) {
 		strcpy(pin, escaped);
 		free(escaped);
 	} else {
 		dprintf("invalid PIN: %s\n", pin);
 		goto err;
-	}
+	} */
 
 	/*
 	 * TODO Also check IBAN

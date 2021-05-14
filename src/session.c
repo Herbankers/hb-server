@@ -113,7 +113,7 @@ static int receiverequest(struct connection *conn, struct hbp_header *request, c
 	/* wait for the client to send a request header */
 	if ((res = READ(request, sizeof(struct hbp_header))) <= 0) {
 #if SSLSOCK
-		if (SSL_get_error(ssl, res) == SSL_ERROR_ZERO_RETURN)
+		if (SSL_get_error(conn->ssl, res) != SSL_ERROR_ZERO_RETURN)
 			return -1;
 #else
 		if (!res)
@@ -186,10 +186,10 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 		switch (request->type) {
 		case HBP_REQ_LOGIN:
 			if (conn->logged_in)
-				return false;
+				goto err;
 
 			if (!login(conn, request_data, request->length, reply, &pack))
-				return false;
+				goto err;
 
 			if (conn->logged_in)
 				iprintf("%s: Session login: %s (User %u, Card %u)\n", conn->host, conn->iban,
@@ -198,7 +198,7 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 			break;
 		case HBP_REQ_LOGOUT:
 			if (!conn->logged_in)
-				return false;
+				goto err;
 
 			iprintf("%s: Session logout: %s (User %u, Card %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
 
@@ -216,44 +216,52 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 			break;
 		case HBP_REQ_INFO:
 			if (!conn->logged_in)
-				return false;
+				goto err;
 
 			if (!info(conn, request_data, request->length, reply, &pack))
-				return false;
+				goto err;
 
 			break;
 		case HBP_REQ_BALANCE:
 			if (!conn->logged_in)
-				return false;
+				goto err;
 
 			if (!balance(conn, request_data, request->length, reply, &pack))
-				return false;
+				goto err;
 
 			break;
 		case HBP_REQ_TRANSFER:
 			if (!conn->logged_in)
-				return false;
+				goto err;
 
 			if (!transfer(conn, request_data, request->length, reply, &pack))
-				return false;
+				goto err;
 
 			break;
 		/* invalid request */
 		default:
-			return false;
+			goto err;
 		}
 	}
 
 	/* copy the msgpack buffer to a newly allocated array to be returned */
 	if (!(*reply_data = realloc(*reply_data, sbuf.size))) {
 		iprintf("out of memory\n");
+		msgpack_sbuffer_destroy(&sbuf);
 		return false;
 	}
 
 	memcpy(*reply_data, sbuf.data, sbuf.size);
 	reply->length = sbuf.size;
 
+	msgpack_sbuffer_destroy(&sbuf);
+
 	return true;
+
+err:
+	msgpack_sbuffer_destroy(&sbuf);
+
+	return false;
 }
 
 void *session(void *args)
