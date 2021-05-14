@@ -157,7 +157,7 @@ static bool ssl_initialize(void)
 	const SSL_METHOD *met;
 
 	/* initialize OpenSSL */
-	iprintf(" initializing OpenSSL...\n");
+	iprintf(" Initializing OpenSSL...\n");
 	SSL_library_init();
 	SSL_load_error_strings();
 
@@ -171,7 +171,7 @@ static bool ssl_initialize(void)
 		iprintf("%s: %s\n", ca, strerror(errno));
 		goto err;
 	}
-	dprintf("using '%s' CA\n", ca);
+	dprintf("  CA: '%s'\n", ca);
 	if (!SSL_CTX_load_verify_locations(ctx, ca, NULL)) {
 		iprintf("unable to load CA: %s\n", ca);
 		goto err;
@@ -182,7 +182,7 @@ static bool ssl_initialize(void)
 		iprintf("%s: %s\n", cert, strerror(errno));
 		goto err;
 	}
-	dprintf("using '%s' certificate\n", cert);
+	dprintf("  Certificate: '%s'\n", cert);
 	if (SSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) != 1)
 		goto err;
 
@@ -190,7 +190,7 @@ static bool ssl_initialize(void)
 		iprintf("%s: %s\n", key, strerror(errno));
 		goto err;
 	}
-	dprintf("using '%s' private key\n", key);
+	dprintf("  Private key: '%s'\n", key);
 	if (SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) != 1)
 		goto err;
 
@@ -200,8 +200,6 @@ static bool ssl_initialize(void)
 	/* require client verification */
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 	SSL_CTX_set_verify_depth(ctx, 1);
-
-	dprintf("OpenSSL has been successfully initialized\n");
 
 	return true;
 
@@ -309,7 +307,7 @@ static void usage(char *prog)
 	printf("Usage: %s [OPTION...]\n\n%s", prog,
 			"  -P PORT NUMBER       port number to bind socket to\n"
 #if SSLSOCK
-			"  -r FILE              CA file to use\n"
+			"  -C FILE              CA file to use\n"
 			"  -c FILE              certificate file to use\n"
 			"  -k FILE              private key file to use\n"
 #endif

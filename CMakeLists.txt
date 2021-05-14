@@ -7,6 +7,10 @@ option(DEBUG "Build with debugging messages and tools" ON)
 if (DEBUG)
 	add_definitions(-DDEBUG)
 endif()
+option(SECURE_SOCKETS "Build with SSL sockets instead of plain sockets" ON)
+if (SECURE_SOCKETS)
+	add_definitions(-DSSLSOCK)
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -21,7 +25,7 @@ endif()
 # OpenSSL
 find_package(OpenSSL REQUIRED)
 
-# pkgconfig packages
+# pkg-config packages
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ARGON2 REQUIRED libargon2)
 pkg_check_modules(MARIADB REQUIRED libmariadb)
@@ -50,6 +54,7 @@ target_link_libraries(${PROJECT_NAME}
 	${ARGON2_LINK_LIBRARIES}
 	${MARIADB_LINK_LIBRARIES}
 	${MSGPACK_LINK_LIBRARIES}
+	${OPENSSL_LIBRARIES}
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
 	${ARGON2_INCLUDE_DIRS}
