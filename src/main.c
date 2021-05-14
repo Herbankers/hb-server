@@ -271,10 +271,9 @@ static bool run(void)
 	}
 
 	/* bind the socket */
-	/* FIXME why IPv6? */
 	server.sin6_family = AF_INET6;
-	server.sin6_addr = in6addr_any;
 	server.sin6_port = htons(strtol(port, NULL, 10));
+	server.sin6_addr = in6addr_any;
 
 	iprintf(" Binding socket...\n");
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
@@ -283,7 +282,7 @@ static bool run(void)
 	}
 
 	iprintf(" The server is listening on port %s...\n", port);
-	if (listen(sock, SOMAXCONN) < 0) {
+	if (listen(sock, SOMAXCONN) < 0) { /* TODO change SOMAXCONN to maximum amount of clients */
 		iprintf("%s\n", strerror(errno));
 		return false;
 	}

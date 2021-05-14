@@ -46,31 +46,21 @@
 #include "hbp.h"
 #include "herbank.h"
 
+#define IPV4_IDENTIFIER	"::ffff:"
+
 /* connect to the client and verify the client certificate */
 static bool verify(struct connection *conn)
 {
-	struct addrinfo *addr = NULL;
-	struct addrinfo hints;
+	struct sockaddr_in6 addr;
+	socklen_t len = sizeof(addr);
 
 	/* retrieve the client IP */
-	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_flags = AI_PASSIVE;
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
+	getpeername(conn->socket, (struct sockaddr *) &addr, &len);
+	inet_ntop(AF_INET6, &addr.sin6_addr, conn->host, INET6_ADDRSTRLEN);
 
-	/* resolve the host */
-	if (getaddrinfo(NULL, port, &hints, &addr) != 0) {
-		iprintf("unable to resolve host %s\n", conn->host);
-		return false;
-	}
-
-	/* copy the IP to a new buffer */
-	if (addr->ai_addr->sa_family == AF_INET)
-		inet_ntop(AF_INET, &((struct sockaddr_in *) addr->ai_addr)->sin_addr, conn->host, INET_ADDRSTRLEN);
-	else if (addr->ai_addr->sa_family == AF_INET6)
-		inet_ntop(AF_INET6, &((struct sockaddr_in6 *) addr->ai_addr)->sin6_addr, conn->host, INET6_ADDRSTRLEN);
-
-	freeaddrinfo(addr);
+	/* convert the IPv4 mapped IPv6 address to an IPv4 address */
+	if (strncmp(conn->host, IPV4_IDENTIFIER, strlen(IPV4_IDENTIFIER)) == 0)
+		memmove(conn->host, conn->host + strlen(IPV4_IDENTIFIER), strlen(conn->host) - strlen(IPV4_IDENTIFIER) + 1);
 
 #if SSLSOCK
 	/* setup an SSL/TLS connection */
