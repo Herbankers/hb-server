@@ -135,23 +135,26 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		/* @param status */
 		msgpack_pack_int(pack, HBP_LOGIN_BLOCKED);
 	} else {
-		/* check if the supplied password is correct */
+		/* check if the supplied PIN is correct */
 		if (argon2id_verify(row[1], pin, strlen(pin)) == ARGON2_OK) {
-			/* right password, reset the login attempts counter */
-			query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `card_id` = x'%s'", card_id);
-
-			/* and start a new session */
+			/* right PIN, start a new session */
 			conn->logged_in = true;
 			conn->expiry_time = time(NULL) + HBP_TIMEOUT;
 			strcpy(conn->iban, iban);
 			conn->user_id = strtol(row[0], NULL, 10);
 			conn->card_id = strtol(row[1], NULL, 10);
 
+			/* and reset the login attempts counter */
+			mysql_free_result(sqlres);
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `card_id` = x'%s'", card_id);
+
 			/* @param status */
 			msgpack_pack_int(pack, HBP_LOGIN_GRANTED);
 		} else {
-			/* wrong password, increment the failed login attempts counter */
-			query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `card_id` = x'%s'", card_id);
+			mysql_free_result(sqlres);
+			/* wrong PIN, increment the failed login attempts counter */
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `card_id` = x'%s'",
+					card_id);
 
 			/* @param status */
 			msgpack_pack_int(pack, HBP_LOGIN_DENIED);

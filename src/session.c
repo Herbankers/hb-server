@@ -346,7 +346,6 @@ void *session(void *args)
 	}
 
 ret:
-	/* TODO !!! XXX logout sessions before disconnect */
 	dprintf("%s: Client disconnected\n", conn.host);
 
 	/* free the reply and request data buffers */

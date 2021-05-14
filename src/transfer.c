@@ -63,10 +63,8 @@ bool transfer(struct connection *conn, const char *data, uint16_t len, struct hb
 	array = unpacked.data.via.array.ptr;
 
 	/* @param iban */
-	/* if (array[HBP_REQ_TRANSFER_IBAN].via.str.size < HBP_IBAN_MIN ||
-			array[HBP_REQ_TRANSFER_IBAN].via.str.size > HBP_IBAN_MAX)
-		goto err; */
-	if (array[HBP_REQ_TRANSFER_IBAN].via.str.size > HBP_IBAN_MAX)
+	if (array[HBP_REQ_TRANSFER_IBAN].via.str.size && (array[HBP_REQ_TRANSFER_IBAN].via.str.size < HBP_IBAN_MIN ||
+				array[HBP_REQ_TRANSFER_IBAN].via.str.size > HBP_IBAN_MAX))
 		goto err;
 	memcpy(iban, array[HBP_REQ_TRANSFER_IBAN].via.str.ptr, array[HBP_REQ_TRANSFER_IBAN].via.str.size);
 	iban[array[HBP_REQ_TRANSFER_IBAN].via.str.size] = '\0';
@@ -97,9 +95,7 @@ bool transfer(struct connection *conn, const char *data, uint16_t len, struct hb
 		dprintf("invalid IBAN: %s\n", conn->iban);
 		goto err;
 	}
-
-	msgpack_unpacked_destroy(&unpacked);
-	msgpack_unpacker_destroy(&unpack);
+	mysql_free_result(sqlres);
 
 	/*
 	 * check if the funds of the current account are sufficient
@@ -112,33 +108,31 @@ bool transfer(struct connection *conn, const char *data, uint16_t len, struct hb
 		/* @param status */
 		msgpack_pack_int(pack, HBP_TRANSFER_INSUFFICIENT_FUNDS);
 	} else {
-		/* TODO check if this is a transfer, withdrawal or deposit */
+		if (strlen(iban) == 0) {
+			/* withdrawal */
 
-		/* right now this is only a withdrawal */
+			mysql_free_result(sqlres);
+			sqlres = query(conn, "UPDATE `accounts` SET `balance` = `balance` - '%d' WHERE `iban` = '%s'",
+					amount, conn->iban);
 
-		/* TODO check if this actually succeeded */
-		query(conn, "UPDATE `accounts` SET `balance` = `balance` - '%d' WHERE `iban` = '%s'", amount, conn->iban);
+			/* @param result */
+			msgpack_pack_int(pack, HBP_TRANSFER_SUCCESS);
+		} else if (strcmp(conn->iban, iban) == 0) {
+			/* deposit: Not Yet Implemented */
 
-		/* @param result */
-		msgpack_pack_int(pack, HBP_TRANSFER_SUCCESS);
+			iprintf("NYI: deposit\n");
+			goto err;
+		} else {
+			/* transfer: Not Yet Implemented */
 
-#if 0
-		/* retrieve the user's first and last name from the database */
-		sqlres = query(conn, "SELECT `balance` FROM `accounts` WHERE `iban` = '%s'", conn->iban);
-		if (!(row = mysql_fetch_row(sqlres))) {
-			dprintf("invalid IBAN: %s\n", conn->iban);
+			iprintf("NYI: transfer\n");
 			goto err;
 		}
-
-		/* @param result */
-		msgpack_pack_int(&pack, );
-
-		free(balance_str);
-		mysql_free_result(sqlres);
-#endif
 	}
 
 	mysql_free_result(sqlres);
+	msgpack_unpacked_destroy(&unpacked);
+	msgpack_unpacker_destroy(&unpack);
 
 	return true;
 
