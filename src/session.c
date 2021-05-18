@@ -277,14 +277,11 @@ void *session(void *args)
 	/* allocate initial buffers for reply and request data */
 	request_data = malloc(128);
 	reply_data = malloc(128);
+	/* TODO check for enomem */
 
 	/* setup our connection structure */
 	memset(&conn, 0, sizeof(struct connection));
 	conn.socket = *((int *) args);
-
-	/* verify the client certificate */
-	if (!verify(&conn))
-		goto ret;
 
 	/* connect to the database */
 	if (!(conn.sql = mysql_init(NULL))) {
@@ -295,6 +292,10 @@ void *session(void *args)
 		iprintf("failed to connect to the database: %s\n", mysql_error(conn.sql));
 		goto ret;
 	}
+
+	/* verify the client certificate */
+	if (!verify(&conn))
+		goto ret;
 
 	for (;;) {
 		/* disconnect if the maximum number of erroneous requests has been exceeded */
