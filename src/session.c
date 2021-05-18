@@ -359,7 +359,8 @@ ret:
 	/* close the client connection */
 	close(conn.socket);
 #if SSLSOCK
-	SSL_free(conn.ssl);
+	if (conn.ssl)
+		SSL_free(conn.ssl);
 #endif
 
 	pthread_exit(NULL);
