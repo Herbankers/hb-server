@@ -357,11 +357,12 @@ ret:
 	mysql_thread_end();
 
 	/* close the client connection */
-	close(conn.socket);
 #if SSLSOCK
+	/* SSL_shutdown(conn.ssl); */
 	if (conn.ssl)
 		SSL_free(conn.ssl);
 #endif
+	close(conn.socket);
 
 	pthread_exit(NULL);
 }
