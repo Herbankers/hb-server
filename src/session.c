@@ -283,6 +283,10 @@ void *session(void *args)
 	memset(&conn, 0, sizeof(struct connection));
 	conn.socket = *((int *) args);
 
+	/* verify the client certificate */
+	if (!verify(&conn))
+		goto ret;
+
 	/* connect to the database */
 	if (!(conn.sql = mysql_init(NULL))) {
 		iprintf("out of memory\n");
@@ -292,10 +296,6 @@ void *session(void *args)
 		iprintf("failed to connect to the database: %s\n", mysql_error(conn.sql));
 		goto ret;
 	}
-
-	/* verify the client certificate */
-	if (!verify(&conn))
-		goto ret;
 
 	for (;;) {
 		/* disconnect if the maximum number of erroneous requests has been exceeded */
@@ -354,14 +354,17 @@ ret:
 	free(reply_data);
 
 	/* close the database connection */
-	mysql_close(conn.sql);
-	mysql_thread_end();
+	if (conn.sql) {
+		mysql_close(conn.sql);
+		mysql_thread_end();
+	}
 
 	/* close the client connection */
 #if SSLSOCK
-	/* SSL_shutdown(conn.ssl); */
-	if (conn.ssl)
+	if (conn.ssl) {
+		SSL_shutdown(conn.ssl);
 		SSL_free(conn.ssl);
+	}
 #endif
 	close(conn.socket);
 

@@ -127,7 +127,7 @@ MYSQL_RES *query(struct connection *conn, const char *fmt, ...)
 	n = vsnprintf(NULL, 0, fmt, args);
 	va_end(args);
 
-	if (!(query = malloc(n))) {
+	if (!(query = malloc(n + 1))) {
 		iprintf("out of memory\n");
 		return NULL;
 	}
@@ -269,6 +269,7 @@ static bool run(void)
 	}
 
 	/* bind the socket */
+	memset(&server, 0, sizeof(struct sockaddr_in6));
 	server.sin6_family = AF_INET6;
 	server.sin6_port = htons(strtol(port, NULL, 10));
 	server.sin6_addr = in6addr_any;
