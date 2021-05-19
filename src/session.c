@@ -362,7 +362,7 @@ ret:
 	/* close the client connection */
 #if SSLSOCK
 	if (conn.ssl) {
-		SSL_shutdown(conn.ssl);
+		/* SSL_shutdown(conn.ssl); */
 		SSL_free(conn.ssl);
 	}
 #endif
