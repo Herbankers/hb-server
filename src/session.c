@@ -62,6 +62,8 @@ static bool verify(struct connection *conn)
 	if (strncmp(conn->host, IPV4_IDENTIFIER, strlen(IPV4_IDENTIFIER)) == 0)
 		memmove(conn->host, conn->host + strlen(IPV4_IDENTIFIER), strlen(conn->host) - strlen(IPV4_IDENTIFIER) + 1);
 
+	dprintf("%s: Client connected\n", conn->host);
+
 #if SSLSOCK
 	/* setup an SSL/TLS connection */
 	if (!(conn->ssl = SSL_new(ctx))) {
@@ -85,8 +87,6 @@ static bool verify(struct connection *conn)
 		return false;
 	}
 #endif
-
-	dprintf("%s: Client connected\n", conn->host);
 
 	return true;
 }
