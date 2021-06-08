@@ -110,16 +110,22 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		goto err;
 	} */
 
-	/*
-	 * We also used to check the Card ID here, but this is not really needed as NOOB doesn't use it
-	 */
+	/* We also used to check the Card ID here, but this is not really needed as NOOB doesn't use it */
 
 	/* check if the IBAN from the request is in the database */
-	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts` FROM `cards` WHERE `iban` = '%s'", iban);
+	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts`, `iban` FROM `cards` WHERE `iban` = '%s\?\?'", iban);
 	if (!(row = mysql_fetch_row(sqlres))) {
 		dprintf("invalid IBAN: %s\n", iban);
 		goto err;
 	}
+
+	/*
+	 * copy the complete IBAN to memory
+	 * The reason this has to be done is because some other groups incorrectly omitted the last 2
+	 * characters of their IBANs because they're lazy. So this is purely for compatiblity.
+	 * Full length IBANs are still accepted
+	 */
+	strcpy(iban, row[4]);
 
 	msgpack_unpacked_destroy(&unpacked);
 	msgpack_unpacker_destroy(&unpack);
@@ -150,7 +156,7 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		} else {
 			mysql_free_result(sqlres);
 			/* wrong PIN, increment the failed login attempts counter */
-			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `iban` = '%s'", iban);
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `card_id` = '%s'", iban);
 
 			/* @param status */
 			msgpack_pack_int(pack, HBP_LOGIN_DENIED);
