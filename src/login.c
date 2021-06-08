@@ -115,7 +115,7 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	 */
 
 	/* check if the IBAN from the request is in the database */
-	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts` FROM `cards` WHERE `iban` = x'%s'", iban);
+	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts` FROM `cards` WHERE `iban` = '%s'", iban);
 	if (!(row = mysql_fetch_row(sqlres))) {
 		dprintf("invalid IBAN: %s\n", iban);
 		goto err;
@@ -143,14 +143,14 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 
 			/* and reset the login attempts counter */
 			mysql_free_result(sqlres);
-			sqlres = query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `iban` = x'%s'", iban);
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `iban` = '%s'", iban);
 
 			/* @param status */
 			msgpack_pack_int(pack, HBP_LOGIN_GRANTED);
 		} else {
 			mysql_free_result(sqlres);
 			/* wrong PIN, increment the failed login attempts counter */
-			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `iban` = x'%s'", iban);
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `iban` = '%s'", iban);
 
 			/* @param status */
 			msgpack_pack_int(pack, HBP_LOGIN_DENIED);
