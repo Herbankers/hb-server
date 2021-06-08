@@ -113,7 +113,8 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	/* We also used to check the Card ID here, but this is not really needed as NOOB doesn't use it */
 
 	/* check if the IBAN from the request is in the database */
-	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts`, `iban` FROM `cards` WHERE `iban` = '%s\?\?'", iban);
+	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts`, `iban` FROM `cards` "
+			"WHERE `iban` = '%s' or `iban` LIKE '%s__'", iban);
 	if (!(row = mysql_fetch_row(sqlres))) {
 		dprintf("invalid IBAN: %s\n", iban);
 		goto err;
