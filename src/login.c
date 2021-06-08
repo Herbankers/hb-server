@@ -34,7 +34,7 @@
 
 bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
-	char card_id[HBP_CID_MAX * 2 + 1], iban[HBP_IBAN_MAX + 1], pin[HBP_PIN_MAX + 1], *escaped;
+	char iban[HBP_IBAN_MAX + 1], pin[HBP_PIN_MAX + 1], *escaped;
 	msgpack_unpacker unpack;
 	msgpack_unpacked unpacked;
 	msgpack_object *array;
@@ -65,20 +65,20 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	array = unpacked.data.via.array.ptr;
 
 	/* @param card_id */
-	if (array[HBP_REQ_LOGIN_CARD_ID].via.str.size > HBP_CID_MAX * 2)
+	/* if (array[HBP_REQ_LOGIN_CARD_ID].via.str.size > HBP_CID_MAX * 2)
 		goto err;
 	memset(card_id, '0', HBP_CID_MAX * 2);
 	memcpy(card_id, array[HBP_REQ_LOGIN_CARD_ID].via.str.ptr, array[HBP_REQ_LOGIN_CARD_ID].via.str.size);
-	card_id[HBP_CID_MAX * 2] = '\0';
+	card_id[HBP_CID_MAX * 2] = '\0'; */
 
 	/* escape the Card ID */
-	if ((escaped = escape(conn, card_id, HBP_CID_MAX * 2))) {
+	/* if ((escaped = escape(conn, card_id, HBP_CID_MAX * 2))) {
 		strcpy(card_id, escaped);
 		free(escaped);
 	} else {
 		dprintf("invalid card ID: %s\n", card_id);
 		goto err;
-	}
+	} */
 
 	/* @param iban */
 	if (array[HBP_REQ_LOGIN_IBAN].via.str.size < HBP_IBAN_MIN || array[HBP_REQ_LOGIN_IBAN].via.str.size > HBP_IBAN_MAX)
@@ -111,16 +111,13 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	} */
 
 	/*
-	 * TODO Also check IBAN
-	 *
-	 * We don't need to do this right now, but this is for future proofing, when we'll be connecting to
-	 * the other teams' servers.
+	 * We also used to check the Card ID here, but this is not really needed as NOOB doesn't use it
 	 */
 
-	/* check if the card ID from the request is in the database */
-	sqlres = query(conn, "SELECT `user_id`, `pin`, `attempts` FROM `cards` WHERE `card_id` = x'%s'", card_id);
+	/* check if the IBAN from the request is in the database */
+	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts` FROM `cards` WHERE `iban` = x'%s'", iban);
 	if (!(row = mysql_fetch_row(sqlres))) {
-		dprintf("invalid card ID: %s\n", card_id);
+		dprintf("invalid IBAN: %s\n", iban);
 		goto err;
 	}
 
@@ -131,12 +128,12 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	reply->type = HBP_REP_LOGIN;
 
 	/* check if this card is blocked */
-	if (strtol(row[2], NULL, 10) >= HBP_PINTRY_MAX) {
+	if (strtol(row[3], NULL, 10) >= HBP_PINTRY_MAX) {
 		/* @param status */
 		msgpack_pack_int(pack, HBP_LOGIN_BLOCKED);
 	} else {
 		/* check if the supplied PIN is correct */
-		if (argon2id_verify(row[1], pin, strlen(pin)) == ARGON2_OK) {
+		if (argon2id_verify(row[2], pin, strlen(pin)) == ARGON2_OK) {
 			/* right PIN, start a new session */
 			conn->logged_in = true;
 			conn->expiry_time = time(NULL) + HBP_TIMEOUT;
@@ -146,15 +143,14 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 
 			/* and reset the login attempts counter */
 			mysql_free_result(sqlres);
-			sqlres = query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `card_id` = x'%s'", card_id);
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `iban` = x'%s'", iban);
 
 			/* @param status */
 			msgpack_pack_int(pack, HBP_LOGIN_GRANTED);
 		} else {
 			mysql_free_result(sqlres);
 			/* wrong PIN, increment the failed login attempts counter */
-			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `card_id` = x'%s'",
-					card_id);
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `iban` = x'%s'", iban);
 
 			/* @param status */
 			msgpack_pack_int(pack, HBP_LOGIN_DENIED);
