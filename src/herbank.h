@@ -61,6 +61,13 @@ struct connection {
 	char		iban[HBP_IBAN_MAX + 1];
 	uint32_t	user_id;
 	uint32_t	card_id;
+
+	/**
+	 * Indicates this is not a local session. I.e. a session via NOOB.
+	 * In fact, this is not a session at all as NOOB doesn't support the concept of sessions.
+	 * We emulate it here though to adhere to our own internal standards.
+	 */
+	bool		foreign;
 };
 
 /** @brief argon2: Number of passes to make */
@@ -135,10 +142,19 @@ char *escape(struct connection *conn, const char *str, size_t limit);
  */
 MYSQL_RES *query(struct connection *conn, const char *fmt, ...);
 
+/* HBP (local) request handlers */
 bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
 bool info(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
 bool balance(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
 bool transfer(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack);
+
+/* NOOB (international) request handlers */
+#define BUF_SIZE 256
+
+long noob_request(char *buf, const char *endpoint, const char *_iban, const char *pin, const char *extraparams);
+
+long noob_balance(const char *iban, const char *pin);
+int noob_withdraw(const char *iban, const char *pin, const char *amount);
 
 /* int iban_getcheck(const char *_iban); */
 /* bool iban_validate(const char *iban); */

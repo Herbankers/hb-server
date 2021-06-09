@@ -32,14 +32,114 @@
 #include "hbp.h"
 #include "herbank.h"
 
+static bool local_login(struct connection *conn, char *iban, const char *pin, msgpack_packer *pack)
+{
+	MYSQL_RES *sqlres = NULL;
+	MYSQL_ROW row;
+
+	/* check if the IBAN from the request is in the database */
+	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts`, `iban` FROM `cards` "
+			"WHERE `iban` = '%s' or `iban` LIKE '%s__'", iban, iban);
+	if (!(row = mysql_fetch_row(sqlres))) {
+		dprintf("invalid IBAN: %s\n", iban);
+		mysql_free_result(sqlres);
+		return false;
+	}
+
+	/*
+	 * copy the complete IBAN into memory
+	 * The reason this has to be done is because some other groups incorrectly omitted the last 2
+	 * characters of their IBANs because they're lazy. So this is purely for compatiblity.
+	 * Full length IBANs are still accepted
+	 */
+	strcpy(iban, row[4]);
+
+	/* check if this card is blocked */
+	if (strtol(row[3], NULL, 10) >= HBP_PINTRY_MAX) {
+		/* @param status */
+		msgpack_pack_int(pack, HBP_LOGIN_BLOCKED);
+	} else {
+		/* check if the supplied PIN is correct */
+		if (argon2id_verify(row[2], pin, strlen(pin)) == ARGON2_OK) {
+			/* right PIN, start a new session */
+			conn->logged_in = true;
+			conn->expiry_time = time(NULL) + HBP_TIMEOUT;
+			strcpy(conn->iban, iban);
+			conn->user_id = strtol(row[0], NULL, 10);
+			conn->card_id = strtol(row[1], NULL, 10);
+
+			conn->foreign = false;
+
+			/* and reset the login attempts counter */
+			mysql_free_result(sqlres);
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `iban` = '%s'", iban);
+
+			/* @param status */
+			msgpack_pack_int(pack, HBP_LOGIN_GRANTED);
+		} else {
+			mysql_free_result(sqlres);
+			/* wrong PIN, increment the failed login attempts counter */
+			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `iban` = '%s'", iban);
+
+			/* @param status */
+			msgpack_pack_int(pack, HBP_LOGIN_DENIED);
+		}
+	}
+
+	mysql_free_result(sqlres);
+
+	return true;
+}
+
+static bool noob_login(struct connection *conn, const char *iban, const char *pin, msgpack_packer *pack)
+{
+	char outbuf[BUF_SIZE + 1];
+	long status;
+
+	iprintf("%s: Forwarding login to NOOB: %s\n", conn->host, iban);
+
+	status = noob_request(outbuf, "balance", iban, pin, NULL);
+
+	/*
+	 * whoever came up with the ridiculous idea to use HTTP status codes
+	 * to indicate the status of the server, ***** **** **********!
+	 */
+	if (status == 435 && strcmp(outbuf, "Pincode wrong") == 0) {
+		/* @param status */
+		msgpack_pack_int(pack, HBP_LOGIN_DENIED);
+
+		return true;
+	} else if (status == 434 && strcmp(outbuf, "Account blocked") == 0) {
+		/* @param status */
+		msgpack_pack_int(pack, HBP_LOGIN_BLOCKED);
+
+		return true;
+	} else if (status != 209) {
+		return false;
+	}
+
+	conn->logged_in = true;
+	conn->expiry_time = time(NULL) + HBP_TIMEOUT;
+	strcpy(conn->iban, iban);
+	conn->user_id = 0; /* FIXME this is a little confusing */
+	conn->card_id = 0; /* FIXME this is a little confusing */
+
+	/* indicate that this is a NOOB session */
+	conn->foreign = true;
+
+	/* @param status */
+	msgpack_pack_int(pack, HBP_LOGIN_GRANTED_REMOTE);
+
+	return true;
+}
+
 bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
 {
 	char iban[HBP_IBAN_MAX + 1], pin[HBP_PIN_MAX + 1], *escaped;
 	msgpack_unpacker unpack;
 	msgpack_unpacked unpacked;
 	msgpack_object *array;
-	MYSQL_RES *sqlres = NULL;
-	MYSQL_ROW row;
+	bool res = false;
 
 	if (!msgpack_unpacker_init(&unpack, len))
 		return false;
@@ -64,22 +164,6 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		goto err;
 	array = unpacked.data.via.array.ptr;
 
-	/* @param card_id */
-	/* if (array[HBP_REQ_LOGIN_CARD_ID].via.str.size > HBP_CID_MAX * 2)
-		goto err;
-	memset(card_id, '0', HBP_CID_MAX * 2);
-	memcpy(card_id, array[HBP_REQ_LOGIN_CARD_ID].via.str.ptr, array[HBP_REQ_LOGIN_CARD_ID].via.str.size);
-	card_id[HBP_CID_MAX * 2] = '\0'; */
-
-	/* escape the Card ID */
-	/* if ((escaped = escape(conn, card_id, HBP_CID_MAX * 2))) {
-		strcpy(card_id, escaped);
-		free(escaped);
-	} else {
-		dprintf("invalid card ID: %s\n", card_id);
-		goto err;
-	} */
-
 	/* @param iban */
 	if (array[HBP_REQ_LOGIN_IBAN].via.str.size < HBP_IBAN_MIN || array[HBP_REQ_LOGIN_IBAN].via.str.size > HBP_IBAN_MAX)
 		goto err;
@@ -102,6 +186,7 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	pin[array[HBP_REQ_LOGIN_PIN].via.str.size] = '\0';
 
 	/* escape the PIN */
+	/* XXX wait, why are we not escaping this? */
 	/* if ((escaped = escape(conn, pin, HBP_PIN_MAX))) {
 		strcpy(pin, escaped);
 		free(escaped);
@@ -110,68 +195,17 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 		goto err;
 	} */
 
-	/* We also used to check the Card ID here, but this is not really needed as NOOB doesn't use it */
-
-	/* check if the IBAN from the request is in the database */
-	sqlres = query(conn, "SELECT `user_id`, `card_id`, `pin`, `attempts`, `iban` FROM `cards` "
-			"WHERE `iban` = '%s' or `iban` LIKE '%s__'", iban);
-	if (!(row = mysql_fetch_row(sqlres))) {
-		dprintf("invalid IBAN: %s\n", iban);
-		goto err;
-	}
-
-	/*
-	 * copy the complete IBAN to memory
-	 * The reason this has to be done is because some other groups incorrectly omitted the last 2
-	 * characters of their IBANs because they're lazy. So this is purely for compatiblity.
-	 * Full length IBANs are still accepted
-	 */
-	strcpy(iban, row[4]);
-
-	msgpack_unpacked_destroy(&unpacked);
-	msgpack_unpacker_destroy(&unpack);
-
 	/* @param type */
 	reply->type = HBP_REP_LOGIN;
 
-	/* check if this card is blocked */
-	if (strtol(row[3], NULL, 10) >= HBP_PINTRY_MAX) {
-		/* @param status */
-		msgpack_pack_int(pack, HBP_LOGIN_BLOCKED);
-	} else {
-		/* check if the supplied PIN is correct */
-		if (argon2id_verify(row[2], pin, strlen(pin)) == ARGON2_OK) {
-			/* right PIN, start a new session */
-			conn->logged_in = true;
-			conn->expiry_time = time(NULL) + HBP_TIMEOUT;
-			strcpy(conn->iban, iban);
-			conn->user_id = strtol(row[0], NULL, 10);
-			conn->card_id = strtol(row[1], NULL, 10);
-
-			/* and reset the login attempts counter */
-			mysql_free_result(sqlres);
-			sqlres = query(conn, "UPDATE `cards` SET `attempts` = 0 WHERE `iban` = '%s'", iban);
-
-			/* @param status */
-			msgpack_pack_int(pack, HBP_LOGIN_GRANTED);
-		} else {
-			mysql_free_result(sqlres);
-			/* wrong PIN, increment the failed login attempts counter */
-			sqlres = query(conn, "UPDATE `cards` SET `attempts` = `attempts` + 1 WHERE `card_id` = '%s'", iban);
-
-			/* @param status */
-			msgpack_pack_int(pack, HBP_LOGIN_DENIED);
-		}
-	}
-
-	mysql_free_result(sqlres);
-
-	return true;
+	if (((iban[0] == 'C' && iban[1] == 'D') || (iban[0] == 'N' && iban[1] == 'L')) && strstr(iban, "HERB"))
+		res = local_login(conn, iban, pin, pack);
+	else
+		res = noob_login(conn, iban, pin, pack);
 
 err:
-	mysql_free_result(sqlres);
 	msgpack_unpacked_destroy(&unpacked);
 	msgpack_unpacker_destroy(&unpack);
 
-	return false;
+	return res;
 }

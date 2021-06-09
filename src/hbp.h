@@ -30,7 +30,7 @@
 #include <stdint.h>
 
 /** @brief Version of the HBP protocol */
-#define HBP_VERSION	1
+#define HBP_VERSION	2
 /** @brief Magic number */
 #define HBP_MAGIC	0x4B9A208E
 /** @brief Default port on which hb-server is hosted */
@@ -103,7 +103,7 @@ typedef enum {
 	 * or sending more than #HBP_ERROR_MAX invalid requests will also end an active session.
 	 * Only one session per connection is possible.
 	 *
-	 * @param card_id (string) The bank card's unique IDentifier (max. #HBP_CID_MAX + 1 bytes)
+	 * @param card_id (string) The bank card's unique IDentifier (max. #HBP_CID_MAX + 1 bytes) (is ignored for now)
 	 * @param iban (string) The bank account number (min. #HBP_IBAN_MIN and max. #HBP_IBAN_MAX bytes)
 	 * @param pin (string) The PIN code associated with the card ID (min. #HBP_PIN_MIN and max. #HBP_PIN_MAX + 1
 	 * bytes)
@@ -266,7 +266,9 @@ typedef enum {
 	/** The card ID or PIN-code is incorrect */
 	HBP_LOGIN_DENIED,
 	/** This card has been blocked because of a number of invalid logins */
-	HBP_LOGIN_BLOCKED
+	HBP_LOGIN_BLOCKED,
+	/** The login via NOOB was successful */
+	HBP_LOGIN_GRANTED_REMOTE
 } hbp_rep_login_status_t;
 
 /** @brief Indicates why the session has ended/the server will disconnect in #HBP_REP_TERMINATED */

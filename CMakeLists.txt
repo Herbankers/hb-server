@@ -22,6 +22,9 @@ if (UNIX AND NOT APPLE)
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -pthread")
 endif()
 
+# Curl
+find_package(CURL REQUIRED)
+
 # OpenSSL
 find_package(OpenSSL REQUIRED)
 
@@ -38,6 +41,7 @@ set(HEADERS
 
 set(SOURCES
 	#src/iban.c
+	src/noob.c
 	src/transfer.c
 	src/balance.c
 	src/info.c
@@ -52,12 +56,14 @@ add_executable(${PROJECT_NAME}
 )
 target_link_libraries(${PROJECT_NAME}
 	${ARGON2_LINK_LIBRARIES}
+	${CURL_LIBRARIES}
 	${MARIADB_LINK_LIBRARIES}
 	${MSGPACK_LINK_LIBRARIES}
 	${OPENSSL_LIBRARIES}
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
 	${ARGON2_INCLUDE_DIRS}
+	${CURL_INCLUDE_DIR}
 	${MARIADB_INCLUDE_DIRS}
 	${MSGPACK_INCLUDE_DIRS}
 	${OPENSSL_INCLUDE_DIR}

@@ -207,6 +207,7 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 			conn->expiry_time = 0;
 			conn->user_id = 0;
 			conn->card_id = 0;
+			conn->foreign = false;
 
 			/* also send an appropriate reply to the client that it's been logged out */
 			reply->type = HBP_REP_TERMINATED;
