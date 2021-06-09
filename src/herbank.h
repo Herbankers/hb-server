@@ -154,7 +154,5 @@ bool transfer(struct connection *conn, const char *data, uint16_t len, struct hb
 
 long noob_request(char *buf, const char *endpoint, const char *_iban, const char *pin, const char *extraparams);
 
-int noob_withdraw(const char *iban, const char *pin, const char *amount);
-
 /* int iban_getcheck(const char *_iban); */
 /* bool iban_validate(const char *iban); */

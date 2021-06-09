@@ -85,6 +85,8 @@ long noob_request(char *buf, const char *endpoint, const char *_iban, const char
 	memcpy(iban, _iban, 16);
 	iban[16] = '\0';
 
+	/* yes could've used snprintf, but what evvvvvv */
+
 	/* construct the header */
 	strcpy(inbuf, "{ \"header\": { \"receiveCountry\": \"");
 	append_country(inbuf, iban);
@@ -154,22 +156,4 @@ long noob_request(char *buf, const char *endpoint, const char *_iban, const char
 	curl_global_cleanup();
 
 	return http_res;
-}
-
-int noob_withdraw(const char *iban, const char *pin, const char *amount)
-{
-	char outbuf[BUF_SIZE + 1];
-	char inbuf[BUF_SIZE + 1];
-	long status;
-
-	strcpy(inbuf, ", \"amount\": ");
-	strcat(inbuf, amount);
-	status = noob_request(outbuf, "withdraw", iban, pin, inbuf);
-
-	if (status == 437 && strcmp(outbuf, "Balance too low") == 0)
-		return HBP_TRANSFER_INSUFFICIENT_FUNDS;
-	else if (status != 208)
-		return HBP_REP_ERROR;
-
-	return HBP_TRANSFER_SUCCESS;
 }

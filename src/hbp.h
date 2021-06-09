@@ -103,7 +103,7 @@ typedef enum {
 	 * or sending more than #HBP_ERROR_MAX invalid requests will also end an active session.
 	 * Only one session per connection is possible.
 	 *
-	 * @param card_id (string) The bank card's unique IDentifier (max. #HBP_CID_MAX + 1 bytes) (is ignored for now)
+	 * @param card_id (string) The bank card's unique IDentifier (max. #HBP_CID_MAX + 1 bytes)
 	 * @param iban (string) The bank account number (min. #HBP_IBAN_MIN and max. #HBP_IBAN_MAX bytes)
 	 * @param pin (string) The PIN code associated with the card ID (min. #HBP_PIN_MIN and max. #HBP_PIN_MAX + 1
 	 * bytes)
@@ -111,6 +111,7 @@ typedef enum {
 	 * @sa The reply associated with this request: #HBP_REP_LOGIN
 	 * @sa An enumeration of parameters: #hbp_req_login_params_t
 	 *
+	 * @deprecated card_id is now ignored because NOOB only relies on the IBAN
 	 * @todo Have a cooldown period on logins to prevent brute forcing
 	 */
 	HBP_REQ_LOGIN = 0,
@@ -285,8 +286,11 @@ typedef enum {
 typedef enum {
 	/** The transfer has been approved and has successfully been processed */
 	HBP_TRANSFER_SUCCESS,
-	/** request has been send to an external server but is still processing, the status is unknown right now */
+	/**
+	 * The request has been sent to an external server but is still processing, the status is unknown right now
+	 * @deprecated hb-server never sends this reply
+	 */
 	HBP_TRANSFER_PROCESSING,
-	/** transfer has failed to process due to insufficient funds on the source account */
+	/** The transfer has failed to process due to insufficient funds on the source account */
 	HBP_TRANSFER_INSUFFICIENT_FUNDS
 } hbp_rep_transfer_result_t;

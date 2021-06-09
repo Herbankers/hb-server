@@ -32,7 +32,7 @@
 #include "hbp.h"
 #include "herbank.h"
 
-static bool local_login(struct connection *conn, char *iban, const char *pin, msgpack_packer *pack)
+static bool local_login(struct connection *conn, msgpack_packer *pack, char *iban, const char *pin)
 {
 	MYSQL_RES *sqlres = NULL;
 	MYSQL_ROW row;
@@ -91,7 +91,7 @@ static bool local_login(struct connection *conn, char *iban, const char *pin, ms
 	return true;
 }
 
-static bool noob_login(struct connection *conn, const char *iban, const char *pin, msgpack_packer *pack)
+static bool noob_login(struct connection *conn, msgpack_packer *pack, const char *iban, const char *pin)
 {
 	char outbuf[BUF_SIZE + 1];
 	long status;
@@ -198,9 +198,9 @@ bool login(struct connection *conn, const char *data, uint16_t len, struct hbp_h
 	reply->type = HBP_REP_LOGIN;
 
 	if (((iban[0] == 'C' && iban[1] == 'D') || (iban[0] == 'N' && iban[1] == 'L')) && strstr(iban, "HERB"))
-		res = local_login(conn, iban, pin, pack);
+		res = local_login(conn, pack, iban, pin);
 	else
-		res = noob_login(conn, iban, pin, pack);
+		res = noob_login(conn, pack, iban, pin);
 
 err:
 	msgpack_unpacked_destroy(&unpacked);
