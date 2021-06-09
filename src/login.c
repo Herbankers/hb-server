@@ -96,8 +96,6 @@ static bool noob_login(struct connection *conn, const char *iban, const char *pi
 	char outbuf[BUF_SIZE + 1];
 	long status;
 
-	iprintf("%s: Forwarding login to NOOB: %s\n", conn->host, iban);
-
 	status = noob_request(outbuf, "balance", iban, pin, NULL);
 
 	/*
@@ -126,6 +124,7 @@ static bool noob_login(struct connection *conn, const char *iban, const char *pi
 
 	/* indicate that this is a NOOB session */
 	conn->foreign = true;
+	strncpy(conn->pin, pin, HBP_PIN_MAX);
 
 	/* @param status */
 	msgpack_pack_int(pack, HBP_LOGIN_GRANTED_REMOTE);

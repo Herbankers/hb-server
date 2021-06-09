@@ -191,23 +191,34 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 			if (!login(conn, request_data, request->length, reply, &pack))
 				goto err;
 
-			if (conn->logged_in)
-				iprintf("%s: Session login: %s (User %u, Card %u)\n", conn->host, conn->iban,
-						conn->user_id, conn->card_id);
+			if (conn->logged_in) {
+				if (!conn->foreign)
+					iprintf("%s: Session login: %s (User %u, Card %u)\n", conn->host, conn->iban,
+							conn->user_id, conn->card_id);
+				else
+					iprintf("%s: Session login: %s (NOOB)\n", conn->host, conn->iban);
+			}
 
 			break;
 		case HBP_REQ_LOGOUT:
 			if (!conn->logged_in)
 				goto err;
 
-			iprintf("%s: Session logout: %s (User %u, Card %u)\n", conn->host, conn->iban, conn->user_id, conn->card_id);
+			if (!conn->foreign)
+				iprintf("%s: Session logout: %s (User %u, Card %u)\n", conn->host, conn->iban,
+						conn->user_id, conn->card_id);
+			else
+				iprintf("%s: Session logout: %s (NOOB)\n", conn->host, conn->iban);
 
 			conn->logged_in = false;
 			/* clear all other variables for security */
 			conn->expiry_time = 0;
+			memset(conn->iban, 0, HBP_IBAN_MAX + 1);
 			conn->user_id = 0;
 			conn->card_id = 0;
+
 			conn->foreign = false;
+			memset(conn->pin, 0, HBP_PIN_MAX + 1);
 
 			/* also send an appropriate reply to the client that it's been logged out */
 			reply->type = HBP_REP_TERMINATED;
@@ -216,7 +227,7 @@ static bool handle_request(struct connection *conn, struct hbp_header *request, 
 
 			break;
 		case HBP_REQ_INFO:
-			if (!conn->logged_in)
+			if (!conn->logged_in || conn->foreign)
 				goto err;
 
 			if (!info(conn, request_data, request->length, reply, &pack))

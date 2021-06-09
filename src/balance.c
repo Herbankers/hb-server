@@ -29,7 +29,7 @@
 #include "hbp.h"
 #include "herbank.h"
 
-bool balance(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
+static bool local_balance(struct connection *conn, msgpack_packer *pack)
 {
 	MYSQL_RES *sqlres = NULL;
 	MYSQL_ROW row;
@@ -41,9 +41,6 @@ bool balance(struct connection *conn, const char *data, uint16_t len, struct hbp
 		dprintf("invalid IBAN: %s\n", conn->iban);
 		goto err;
 	}
-
-	/* @param type */
-	reply->type = HBP_REP_BALANCE;
 
 	/* create a new string and add the decimal point (hence +2 including null terminator) */
 	if (!(balance_str = malloc(strlen(row[0]) + 2)))
@@ -65,4 +62,39 @@ err:
 	mysql_free_result(sqlres);
 
 	return false;
+}
+
+static bool noob_balance(struct connection *conn, msgpack_packer *pack)
+{
+	char balance_str[BUF_SIZE + 1];
+	long status;
+
+	status = noob_request(balance_str, "balance", conn->iban, conn->pin, NULL);
+
+	/* check if the length of the balance string is somewhat sensible */
+	if (strlen(balance_str) > 16)
+		return false;
+
+	/* this should always be true */
+	if (status != 209)
+		return false;
+
+	/* @param balance */
+	msgpack_pack_str(pack, strlen(balance_str));
+	msgpack_pack_str_body(pack, balance_str, strlen(balance_str));
+
+	return true;
+}
+
+bool balance(struct connection *conn, const char *data, uint16_t len, struct hbp_header *reply, msgpack_packer *pack)
+{
+	/* @param type */
+	reply->type = HBP_REP_BALANCE;
+
+	if (!conn->foreign)
+		return local_balance(conn, pack);
+	else
+		return noob_balance(conn, pack);
+
+	return conn->foreign ? noob_balance(conn, pack) : local_balance(conn, pack);
 }

@@ -68,6 +68,7 @@ struct connection {
 	 * We emulate it here though to adhere to our own internal standards.
 	 */
 	bool		foreign;
+	char		pin[HBP_PIN_MAX + 1];  /* only used for foreign hosts */
 };
 
 /** @brief argon2: Number of passes to make */
@@ -153,7 +154,6 @@ bool transfer(struct connection *conn, const char *data, uint16_t len, struct hb
 
 long noob_request(char *buf, const char *endpoint, const char *_iban, const char *pin, const char *extraparams);
 
-long noob_balance(const char *iban, const char *pin);
 int noob_withdraw(const char *iban, const char *pin, const char *amount);
 
 /* int iban_getcheck(const char *_iban); */

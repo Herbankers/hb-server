@@ -156,29 +156,6 @@ long noob_request(char *buf, const char *endpoint, const char *_iban, const char
 	return http_res;
 }
 
-long noob_balance(const char *iban, const char *pin)
-{
-	char outbuf[BUF_SIZE + 1];
-	long status;
-
-	status = noob_request(outbuf, "balance", iban, pin, NULL);
-
-	/*
-	 * this is lazy programming man
-	 * who cares though, they had me build this on the last day before final delivery
-	 * + nobody gonna read this anyways because code quality is not checked
-	 *
-	 * and if u are reading this, hi
-	 */
-	if (status != 209)
-		return -9999999;
-
-	/* remove the decimal separator from the balance string */
-	memmove(outbuf + strlen(outbuf) - 3, outbuf + strlen(outbuf) - 2, 3);
-
-	return strtol(outbuf, NULL, 10);
-}
-
 int noob_withdraw(const char *iban, const char *pin, const char *amount)
 {
 	char outbuf[BUF_SIZE + 1];
