@@ -43,11 +43,16 @@ static bool local_balance(struct connection *conn, msgpack_packer *pack)
 	}
 
 	/* create a new string and add the decimal point (hence +2 including null terminator) */
-	if (!(balance_str = malloc(strlen(row[0]) + 2)))
+	if (!(balance_str = malloc(strlen(row[0]) + 4)))
 		goto err;
-	memcpy(balance_str, row[0], strlen(row[0]) - 2);
-	balance_str[strlen(row[0]) - 2] = '.';
-	memcpy(balance_str + strlen(row[0]) - 1, row[0] + strlen(row[0]) - 2, 3);
+
+	if (strcmp(row[0], "0") == 0) {
+		strcpy(balance_str, "0.00");
+	} else {
+		memcpy(balance_str, row[0], strlen(row[0]) - 2);
+		balance_str[strlen(row[0]) - 2] = '.';
+		memcpy(balance_str + strlen(row[0]) - 1, row[0] + strlen(row[0]) - 2, 3);
+	}
 
 	/* @param balance */
 	msgpack_pack_str(pack, strlen(balance_str));

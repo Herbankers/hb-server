@@ -73,10 +73,20 @@ static bool local_transfer(struct connection *conn, msgpack_packer *pack, const 
 			iprintf("NYI: deposit\n");
 			goto err;
 		} else {
-			/* transfer: Not Yet Implemented */
+			/* transfer */
 
-			iprintf("NYI: transfer\n");
-			goto err;
+			/* subtract from the balance on our account */
+			mysql_free_result(sqlres);
+			sqlres = query(conn, "UPDATE `accounts` SET `balance` = `balance` - '%lld' WHERE `iban` = '%s'",
+					amount, conn->iban);
+
+			/* add to balance on the other account */
+			mysql_free_result(sqlres);
+			sqlres = query(conn, "UPDATE `accounts` SET `balance` = `balance` + '%lld' WHERE `iban` = '%s'",
+					amount, iban);
+
+			/* @param result */
+			msgpack_pack_int(pack, HBP_TRANSFER_SUCCESS);
 		}
 	}
 
